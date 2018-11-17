@@ -1,77 +1,41 @@
-/* Execute With:
+import { replserver } from "./repl";
+import { readFile } from "fs";
+import { promisify } from "util";
+import { tuple, readStdin } from "./util";
+import { interpreter } from "./interpreter";
+const rf = promisify(readFile);
 
-    npm run build
-    node build/index.js
+const [, , ...args] = process.argv;
 
-    OR
-
-    npm run exec
-*/
-
-type Operation = "mult" | "div" | "add" | "sub";
-type ParenToken = { kind: "paren"; value: "open" | "close", origvalue: string };
-type OpToken = { kind: "op"; value: Operation, origvalue: string };
-type NumToken = { kind: "number"; value: number, origvalue: string };
-type Token = OpToken | NumToken | ParenToken;
-
-const whitespace = /\s+/;
-const number = /[0-9]+/;
-const operator = /[+*/\-]/
-
-const tuple = <T extends any[]>(...a: T) => a
-
-const replace = (str: string, match: string, replace: string): string =>
-  str === match ? replace : str
-
-const lexer = (input: string): Token[] => {
-  const split = input
-    .replace(/\(/g, " ( ")
-    .replace(/\)/g, " ) ")
-    .split(/\s+/)
-    .filter(x => x != '');
-  const output: Token[] = []
-
-  for (const str of split) {
-    const origvalue = str
-    if (number.test(str))
-      output.push({ kind: "number", value: parseInt(str, 10), origvalue });
-    else if (str === '+' || str === '-' || str === '*' || str === '/') {
-      const kind = 'op'
-      switch (str) {
-        case '*':
-          output.push({ kind, value: 'mult', origvalue })
-          break;
-        case '+':
-          output.push({ kind, value: 'add', origvalue })
-          break;
-        case '-':
-          output.push({ kind, value: 'sub', origvalue })
-          break;
-        case '/':
-          output.push({ kind, value: 'div', origvalue })
-          break;
-      }
-    } else if (str === ')' || str === '(')
-      output.push({ kind: 'paren', value: str === '(' ? 'open' : 'close', origvalue })
-    else {
-      throw new Error(`Unexpected token ${str}`)
-    }
-  }
-
-  return output
-};
-
-type AST = any
-
-const parser = (tokens: Token[]): AST => {
-
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(`USAGE: ts-lisp [OPTIONS] [FILES...]
+OPTIONS:
+  -r | --repl   Open an interactive REPL
+  -             Read from standard input
+If FILES is excluded the program will read from standard input 
+  `);
+  process.exit(0);
+} else if (args[0] === "-r" || args[0] === "--repl") {
+  replserver();
+} else if (args[0] === "-" || args.length === 0) {
+  // read from standard input
+  readStdin()
+    .then(text => console.log(interpreter(text)))
+    .catch(err => {
+      console.error(err.message);
+      process.exit(1);
+    });
+} else {
+  // read each file and evaluate
+  let errored = false;
+  const ps = args.map(file =>
+    rf(file, "utf8")
+      .then(text => tuple(file, interpreter(text)))
+      .then(([file, result]) => console.log(`${file}\n${result}\n`))
+      .catch(err => {
+        errored = true;
+        console.error(file + ": " + err.message);
+      })
+  );
+  Promise.all(ps).then(() => process.exit(errored ? 1 : 0));
 }
-
-const execute = (ast: AST): string => {}
-
-const firstinput = "(* 7 (+ 5 6))";
-const invalidinput = "(* 7 (+ % 6))";
-console.log(lexer(firstinput))
-console.log(lexer(invalidinput))
-// Example final process:
-// console.log(execute(parser(lexer(input))))

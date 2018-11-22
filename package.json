@@ -5,7 +5,60 @@
     "build": "tsc -p ./tsconfig.json"
   },
   "devDependencies": {
+    "@types/jest": "^23.3.9",
     "@types/node": "^10.12.9",
+    "fast-check": "^1.7.1",
+    "jest": "^23.6.0",
+    "ts-jest": "^23.10.4",
+    "ts-node": "^7.0.1",
     "typescript": "^3.1.6"
+  },
+  "dependencies": {},
+  "jest": {
+    "coverageThreshold": {
+      "global": {
+        "branches": 95,
+        "functions": 95,
+        "lines": 95,
+        "statements": -15
+      }
+    },
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx,mjs,ts,tsx}"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      ".*\\.d\\.ts",
+      "<rootDir>/src/(.*)?/__tests__/(.*)?\\.helper\\.ts",
+      "<rootDir>/src/(.*)?/__tests__/(.*)?__helper__(.*)"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "<rootDir>/src/(.*)?/__tests__/(.*)?\\.helper\\.ts",
+      "<rootDir>/src/(.*)?/__tests__/(.*)?__helper__(.*)"
+    ],
+    "testMatch": [
+      "<rootDir>/src/**/__tests__/**/*.{js,jsx,mjs,ts,tsx}",
+      "<rootDir>/src/**/?(*.)(spec|test).{js,jsx,mjs,ts,tsx}"
+    ],
+    "testEnvironment": "node",
+    "testURL": "http://localhost",
+    "transform": {
+      "^.+\\.(ts|tsx)$": "ts-jest"
+    },
+    "transformIgnorePatterns": [
+      "[/\\\\]node_modules[/\\\\].+\\.(js|jsx|mjs|ts|tsx)$"
+    ],
+    "moduleFileExtensions": [
+      "web.js",
+      "js",
+      "json",
+      "web.jsx",
+      "jsx",
+      "node",
+      "mjs",
+      "ts",
+      "tsx"
+    ]
   }
 }

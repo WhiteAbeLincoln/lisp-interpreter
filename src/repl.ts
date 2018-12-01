@@ -1,5 +1,5 @@
 import repl from "repl";
-import { interpreter } from "./interpreter";
+import { interpreter, printExpression } from "./interpreter";
 import vm from "vm";
 
 export const replserver = () =>
@@ -34,6 +34,9 @@ export const replserver = () =>
         else cb(err, null);
       }
       cb(null, result);
+    },
+    writer: output => {
+      return (Array.isArray(output) && !(output as any).kind) || typeof output === 'undefined' ? '' : printExpression(output)
     }
   });
 

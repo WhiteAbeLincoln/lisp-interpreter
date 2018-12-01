@@ -8,9 +8,11 @@
   },
   "devDependencies": {
     "@types/jest": "^23.3.9",
+    "@types/mem": "^1.1.2",
     "@types/node": "^10.12.9",
     "fast-check": "^1.7.1",
     "jest": "^23.6.0",
+    "mem": "^4.0.0",
     "ts-jest": "^23.10.4",
     "ts-node": "^7.0.1",
     "typescript": "^3.1.6"

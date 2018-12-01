@@ -13,7 +13,7 @@ export type NumToken = { kind: 'number'; value: number } & TokenBase
 export type StringToken = { kind: 'string'; value: string } & TokenBase
 export type Token = SymToken | NumToken | ParenToken | StringToken
 
-export const printToken = (tok: Token) => {
+export const printToken = (tok: Token): string => {
   switch (tok.kind) {
     case 'number':
       return `Number(${tok.value})`
@@ -21,6 +21,8 @@ export const printToken = (tok: Token) => {
       return tok.origvalue
     case 'symbol':
       return `Symbol(${tok.value})`
+    case 'string':
+      return `String(${tok.value})`
   }
 }
 
@@ -104,6 +106,7 @@ const createReader = (
 
 /**
  * Use this lexer
+ * TODO: rewrite lexer to be pull based with generators (so that parser can ask for input instead of holding whole text in memory)
  * @param input an input as a string
  */
 export const lexer = (input: string) => {
@@ -159,24 +162,26 @@ export const lexer = (input: string) => {
   return a.output
 }
 
+const numberRegex = /^[-+]?[0-9]*\.?[0-9]+$/
 export const isNumber = (buffer: string): boolean => {
-  const [first, ...rest] = buffer
-  const seenSign = first === '-' || first === '+'
-  let seenPeriod = first === '.'
-  // first must be a sign, a number char, or a period
-  if (!seenSign && !number.test(first) && !seenPeriod) return false
-  // we must have more characters than just sign or period
-  if ((seenSign || seenPeriod) && rest.length === 0) return false
-  // rest must be all number char or a period, but period cannot occur multiple times
-  for (const c of rest) {
-    if (c === '.' && !seenPeriod) {
-      seenPeriod = true
-      continue
-    } else if (number.test(c)) continue
-    else return false
-  }
+  return numberRegex.test(buffer)
+  // const [first, ...rest] = buffer
+  // const seenSign = first === '-' || first === '+'
+  // let seenPeriod = first === '.'
+  // // first must be a sign, a number char, or a period
+  // if (!seenSign && !number.test(first) && !seenPeriod) return false
+  // // we must have more characters than just sign or period
+  // if ((seenSign || seenPeriod) && rest.length === 0) return false
+  // // rest must be all number char or a period, but period cannot occur multiple times
+  // for (const c of rest) {
+  //   if (c === '.' && !seenPeriod) {
+  //     seenPeriod = true
+  //     continue
+  //   } else if (number.test(c)) continue
+  //   else return false
+  // }
 
-  return true
+  // return true
 }
 
 const isSeparationChar = (

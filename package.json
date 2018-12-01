@@ -1,8 +1,10 @@
 {
   "scripts": {
     "start": "node build/index.js",
-    "exec": "npm run build && npm start",
-    "build": "tsc -p ./tsconfig.json"
+    "build": "tsc -p ./tsconfig.json",
+    "build-run": "npm run build && npm start",
+    "build-repl": "npm run build && npm start -- -r",
+    "repl": "npm start -r"
   },
   "devDependencies": {
     "@types/jest": "^23.3.9",

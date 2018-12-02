@@ -4,7 +4,7 @@
     "build": "tsc -p ./tsconfig.json",
     "build-run": "npm run build && npm start",
     "build-repl": "npm run build && npm start -- -r",
-    "repl": "npm start -r"
+    "repl": "npm start -- -r"
   },
   "devDependencies": {
     "@types/jest": "^23.3.9",
@@ -12,12 +12,14 @@
     "@types/node": "^10.12.9",
     "fast-check": "^1.7.1",
     "jest": "^23.6.0",
-    "mem": "^4.0.0",
     "ts-jest": "^23.10.4",
     "ts-node": "^7.0.1",
     "typescript": "^3.1.6"
   },
-  "dependencies": {},
+  "dependencies": {
+    "immer": "^1.8.0",
+    "mem": "^4.0.0"
+  },
   "jest": {
     "coverageThreshold": {
       "global": {

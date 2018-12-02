@@ -112,7 +112,7 @@ export type AndPred1 = <A, B extends A>(
 ) => Refinement<A, B>
 export type AndPred2 = <A, B extends A>(
   p1: Refinement<A, B>,
-  p2: Predicate<A>,
+  p2: Predicate<B>,
 ) => Refinement<A, B>
 type AndFn = AndPred & AndPred1 & AndPred2 & AndTransitive & AndIntersection
 

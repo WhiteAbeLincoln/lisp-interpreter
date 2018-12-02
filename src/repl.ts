@@ -36,7 +36,9 @@ export const replserver = () =>
       cb(null, result);
     },
     writer: output => {
-      return (Array.isArray(output) && !(output as any).kind) || typeof output === 'undefined' ? '' : printExpression(output)
+      console.log(output)
+      return ''
+      // return (Array.isArray(output) && !(output as any).kind) || typeof output === 'undefined' ? '' : printExpression(output)
     }
   });
 

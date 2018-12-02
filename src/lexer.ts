@@ -11,7 +11,8 @@ export type ParenToken = OpenParen | CloseParen
 export type SymToken = { kind: 'symbol'; value: string } & TokenBase
 export type NumToken = { kind: 'number'; value: number } & TokenBase
 export type StringToken = { kind: 'string'; value: string } & TokenBase
-export type Token = SymToken | NumToken | ParenToken | StringToken
+export type ListDelimToken = { kind: 'dot'; value: '.' } & TokenBase
+export type Token = SymToken | NumToken | ParenToken | StringToken | ListDelimToken
 
 export const printToken = (tok: Token): string => {
   switch (tok.kind) {
@@ -23,6 +24,8 @@ export const printToken = (tok: Token): string => {
       return `Symbol(${tok.value})`
     case 'string':
       return `String(${tok.value})`
+    case 'dot':
+      return '.'
   }
 }
 
@@ -54,7 +57,7 @@ export const syntaxError = (
 
 type AutomatonState = {
   pos: { line: number; col: number }
-  accum: { line: number; col: number; value: '' }
+  accum: { line: number; col: number; value: string }
   output: Token[]
   index: number
   input: string
@@ -218,11 +221,13 @@ export const matchNumberOrSym = (
   // read characters until we reach a separation character: ; ( \n ) ' '
   let chr: string
   let lastWasEscape = escape
+  let escapedDot = false
   while (true) {
     chr = read()
     if (chr === '' && !lastWasEscape) break
 
     if (lastWasEscape) {
+      if (chr === '.') escapedDot = true
       if (chr === '')
         throw new SyntaxError(
           `Unterminated escape sequence at ${a.pos.line}:${a.pos.col - 1}`,
@@ -235,7 +240,15 @@ export const matchNumberOrSym = (
   retract(a)
 
   // returns
-  if (isNumber(a.accum.value))
+  if (a.accum.value === '.' && !escapedDot)
+    ret(a, {
+      kind: 'dot',
+      value: '.',
+      origvalue: '.',
+      line: a.accum.line,
+      column: a.accum.col
+    })
+  else if (isNumber(a.accum.value))
     ret(a, {
       kind: 'number',
       value: parseFloat(a.accum.value),

@@ -17,7 +17,7 @@ import {
 } from './lexer'
 import { or } from './match/functional'
 import { Cons, listToIterable, consProper, cons, isCons } from './Cons'
-import { nil, symboltable, isNil, symExpr, evalFn, SymbolTable } from './symboltable'
+import { nil, symboltable, isNil, symExpr, evalFn, SymbolTable, LambdaValue, SpecialFormValue } from './symboltable'
 
 /* Execute With:
 
@@ -29,43 +29,7 @@ import { nil, symboltable, isNil, symExpr, evalFn, SymbolTable } from './symbolt
     npm run exec
 */
 
-// const validateLambdaList = (l: SExpr) => {
-//   if (allSymbolExpr(l)) {
-//     let hitRest = false
-//     let nextIsRest = false
-//     const output = [] as Array<{ name: string, rest?: boolean }>
-//     for (const sym of l) {
-//       // if we already had a rest parameter and the next one is not the parameter name
-//       // i.e. we tried to provide a param after a rest param: (defun test (a &rest b c) c)
-//       if (!nextIsRest && hitRest) {
-//         throw new SyntaxError(`lambda list element ${sym.value} is superfluous. Only one variable is allowed after ${REST_SYM}`)
-//       }
-//       if (sym.value === REST_SYM) {
-//         // if we provide multiple rest paramters: (defun test (a &rest b &rest c) c)
-//         if (hitRest) {
-//           throw new SyntaxError(`lambda list marker ${REST_SYM} not allowed here`)
-//         }
-//         nextIsRest = true
-//         hitRest = true
-//         continue
-//       }
-//       if (nextIsRest) {
-//         output.push({ name: sym.value, rest: true })
-//         nextIsRest = false
-//         continue
-//       }
-//       output.push({ name: sym.value })
-//     }
-//     // we had a rest parameter, but the name was not provided. i.e. (defun test (a &rest) a)
-//     if (nextIsRest) {
-//       throw new SyntaxError(`missing ${REST_SYM} parameter in lambda list`)
-//     }
-//     return output
-//   }
-//   return []
-// }
-
-export type SExpression =  string | number | symbol | Cons
+export type SExpression =  string | number | symbol | Cons | LambdaValue | SpecialFormValue
 
 export const printExpression = (val: SExpression): string => {
   if (typeof val === 'string') return `"${val}"`
@@ -95,6 +59,7 @@ export const printExpression = (val: SExpression): string => {
     str += ')'
     return str
   }
+  if (typeof val === 'function') return `<procedure (${val.kind})>`
   return val
 }
 

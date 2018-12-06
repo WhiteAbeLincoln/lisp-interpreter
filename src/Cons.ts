@@ -10,6 +10,12 @@ export type Cons = {
   cdr: SExpression
 }
 
+export interface ConsG<Car extends SExpression = SExpression, Cdr extends SExpression = SExpression> extends Cons {
+  kind: 'cons'
+  car: Car
+  cdr: Cdr
+}
+
 export type List = Nil | Cons
 
 export const isCons = (c: SExpression): c is Cons =>
@@ -70,8 +76,16 @@ export function* iterateCons(c: Cons) {
   }
 }
 
-export const cdr = (v: List) => isNil(v) ? v : v.cdr
-export const car = (v: List) => isNil(v) ? v : v.car
+export function cdr<A extends ConsG<any, any>>(v: A): A extends ConsG<any, infer C> ? C : never
+export function cdr(v: List): SExpression
+export function cdr(v: List): SExpression {
+  return isNil(v) ? v : v.cdr
+} 
+export function car<A extends ConsG<any, any>>(v: A): A extends ConsG<infer C, any> ? C : never
+export function car(v: List): SExpression
+export function car(v: List): SExpression {
+  return isNil(v) ? v : v.car
+} 
 // really the type should be (...lists: List[], lastList: SExpression)
 // or (...lists: [...List[], SExpression])
 // but we cant have a non-rest param follow a rest

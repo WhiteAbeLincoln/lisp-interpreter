@@ -1,3 +1,5 @@
+import { NoInfer } from './match/types';
+
 export type Predicate<T> = (a: T) => boolean;
 export type Refinement<A, B extends A> = (a: A) => a is B;
 export const symDesc = (a: symbol) => (a as typeof a & { description?: string }).description
@@ -11,36 +13,73 @@ export const truthy = <T>(
  * @param a
  */
 export const tuple = <T extends any[]>(...a: T) => a;
-export const not = <A>(predicate: Predicate<A>): Predicate<A> => {
-  return a => !predicate(a);
-};
 
-export function or<A, B1 extends A, B2 extends A>(
-  p1: Refinement<A, B1>,
-  p2: Refinement<A, B2>
-): Refinement<A, B1 | B2>;
-export function or<A>(p1: Predicate<A>, p2: Predicate<A>): Predicate<A>;
-export function or<A>(p1: Predicate<A>, p2: Predicate<A>): Predicate<A> {
-  return a => p1(a) || p2(a);
+export function filterMap<A, B>(
+  xs: A[],
+  filter: (x: A, idx: number, arr: A[]) => boolean,
+  map: (x: A, idx: number, arr: A[]) => B): B[]
+export function filterMap<A, B>(
+  xs: Iterable<A> | A[],
+  filter: (x: A) => boolean,
+  map: (x: A) => B): B[]
+export function filterMap<A, B>(
+  xs: Iterable<A> | A[],
+  filter: (x: A, idx: number, arr: A[]) => boolean,
+  map: (x: A, idx: number, arr: A[]) => B
+): B[] {
+  const output: B[] = []
+  const arr = Array.isArray(xs) ? xs : []
+  let idx = 0
+
+  for (const x of xs) {
+    if (filter(x, idx, arr)) {
+      output.push(map(x, idx, arr))
+    }
+    idx++
+  }
+
+  return output
 }
 
-export function and<A, B extends A, C extends B>(
-  p1: Refinement<A, B>,
-  p2: Refinement<B, C>
-): Refinement<A, C>;
-export function and<A, B extends A>(
-  p1: Refinement<A, B>,
-  p2: Predicate<B>
-): Refinement<A, B>;
-export function and<A, B extends A>(
-  p1: Predicate<A>,
-  p2: Refinement<A, B>
-): Refinement<A, B>;
-export function and<A>(p1: Predicate<A>, p2: Predicate<A>): Predicate<A>;
-export function and<A>(p1: Predicate<A>, p2: Predicate<A>): Predicate<A> {
-  return a => p1(a) && p2(a);
-}
+const test = <X>(a: X) => (b: X) => b
 
+export function mapFilter
+  <A>(xs: A[]):
+  <B>(map: (x: A, idx: number, arr: A[]) => B) =>
+  <C extends B>(filter: (x: B, idx: number, arr: A[]) => x is C) => C[]
+export function mapFilter
+  <A>(xs: A[]):
+  <B>(map: (x: A, idx: number, arr: A[]) => B) =>
+  (filter: (x: B, idx: number, arr: A[]) => boolean) => B[]
+export function mapFilter
+  <A>(xs: Iterable<A> | A[]):
+  <B>(map: (x: A) => B) =>
+  <C extends B>(filter: (x: B) => x is C) => B[]
+export function mapFilter
+  <A>(xs: Iterable<A> | A[]):
+  <B>(map: (x: A) => B) =>
+  (filter: (x: B) => boolean) => B[]
+export function mapFilter
+  <A>(xs: Iterable<A> | A[]):
+  <B>(map: (x: A, idx: number, arr: A[]) => B) =>
+  <C extends B>(filter: (x: B, idx: number, arr: A[]) => boolean) => C[]
+{
+  return map => filter => {
+    const output: any[] = []
+    const arr = Array.isArray(xs) ? xs : []
+    let idx = 0
+
+    for (const x of xs) {
+      const mapped = map(x, idx, arr)
+      if (filter(mapped, idx, arr)) {
+        output.push(mapped)
+      }
+      idx++
+    }
+
+    return output
+  }
+}
 export const readStdin = () => {
   const stdin = process.stdin;
   let data = "";

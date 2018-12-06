@@ -12,7 +12,23 @@ export type SymToken = { kind: 'symbol'; value: string } & TokenBase
 export type NumToken = { kind: 'number'; value: number } & TokenBase
 export type StringToken = { kind: 'string'; value: string } & TokenBase
 export type ListDelimToken = { kind: 'dot'; value: '.' } & TokenBase
-export type Token = SymToken | NumToken | ParenToken | StringToken | ListDelimToken
+export type QuoteToken = { kind: 'quote'; value: '\'' } & TokenBase
+export type Token = SymToken | NumToken | ParenToken | StringToken | ListDelimToken | QuoteToken
+
+export const isNum = (tok: Token): tok is NumToken => tok.kind === "number";
+isNum.matches = 'number' as 'number'
+
+export const isString = (tok: Token): tok is StringToken => tok.kind === 'string'
+isString.matches = 'string' as 'string'
+
+export const isSymbol = (tok: Token): tok is SymToken => tok.kind === 'symbol'
+isSymbol.matches = 'symbol' as 'symbol'
+
+export const isDotDelim = (tok: Token): tok is ListDelimToken => tok.kind === 'dot'
+isDotDelim.matches = 'dot' as 'dot'
+
+export const isQuote = (tok: Token): tok is QuoteToken => tok.kind === 'quote'
+isQuote.matches = 'quote' as 'quote'
 
 export const printToken = (tok: Token): string => {
   switch (tok.kind) {
@@ -26,6 +42,8 @@ export const printToken = (tok: Token): string => {
       return `String(${tok.value})`
     case 'dot':
       return '.'
+    case 'quote':
+      return 'quote'
   }
 }
 
@@ -151,6 +169,15 @@ export const lexer = (input: string) => {
     } else if (c === '\\') {
       // ESCAPED SYMBOL
       matchNumberOrSym(read, a, true)
+    } else if (c === '\'') {
+      // QUOTE SUGAR
+      ret(a, {
+        kind: 'quote',
+        value: '\'',
+        origvalue: '\'',
+        line: a.pos.line,
+        column: a.pos.col
+      })
     } else if (c !== '') {
       // NUMBER, SYMBOL
       // try to match number or symbol
@@ -233,11 +260,13 @@ export const matchNumberOrSym = (
           `Unterminated escape sequence at ${a.pos.line}:${a.pos.col - 1}`,
         )
       accumulate(a, unescape(chr))
-    } else if (isSeparationChar(chr)) break
+    } else if (isSeparationChar(chr)) {
+      retract(a)
+      break
+    }
     else if (chr !== '\\') accumulate(a)
     lastWasEscape = !lastWasEscape && chr === '\\'
   }
-  retract(a)
 
   // returns
   if (a.accum.value === '.' && !escapedDot)

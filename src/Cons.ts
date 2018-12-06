@@ -1,13 +1,13 @@
-import { SExpression, isNil, nil, Nil, printExpression } from "./interpreter"
+import { SExpression, printExpression } from "./interpreter"
 import { last } from "./iterable"
 import produce from 'immer'
 import { or, and } from "./match/functional"
+import { Nil, isNil, nil } from './symboltable'
 
 export type Cons = {
   kind: 'cons'
   car: SExpression
   cdr: SExpression
-  [Symbol.toStringTag]: 'cons'
 }
 
 export type List = Nil | Cons
@@ -23,7 +23,11 @@ export const isList = or(isNil, isCons)
  */
 export const isProperList = and(isList, (c: List) => isNil(last(listToIterable(c))))
 
-export const cons = (car: SExpression, cdr: SExpression): Cons => ({ car, cdr, kind: 'cons', [Symbol.toStringTag]: 'cons' })
+export const cons = (car: SExpression, cdr: SExpression): Cons => ({
+  car,
+  cdr,
+  kind: 'cons',
+})
 export const consProper = (car: SExpression): Cons => cons(car, nil)
 
 /**
@@ -39,13 +43,13 @@ export const consProper = (car: SExpression): Cons => cons(car, nil)
  * 
  * @param c a cons
  */
-export function* listToIterable(c: List) {
+export function* listToIterable(c: List, yieldLast: boolean = true) {
   let expr: SExpression = c
   while (isCons(expr)) {
     yield expr.car
     expr = expr.cdr
   }
-  yield expr
+  if (yieldLast) yield expr
 }
 
 /**
@@ -73,6 +77,10 @@ export const car = (v: List) => isNil(v) ? v : v.car
 // but we cant have a non-rest param follow a rest
 // and there's no way to express that the type of last element of
 // an array can be an SExpression
+/**
+ * the last argument may be any object,
+ * the remaining arguments must be proper lists
+ */
 export const append = (...lists: List[]) => {
   /*
     we reduce over the right because that should shorten
@@ -108,7 +116,8 @@ export const appendTwo = (list1: List, list2: SExpression) => {
   if (isNil(list1)) return list2
   if (isNil(list2)) return list1
   // check if list1 is a list
-  if (!isList(list1)) throw new TypeError(`append: ${printExpression(list1)} is not a list`)
+  if (!isList(list1))
+    throw new TypeError(`append: ${printExpression(list1)} is not a list`)
 
   // we must clone list1 to avoid modifing it
   // immer allows us to do this pretty efficiently,
@@ -116,18 +125,39 @@ export const appendTwo = (list1: List, list2: SExpression) => {
   // also, immer assumes our input to be a tree
   return produce(list1, draft => {
     const lastCons = last(iterateCons(draft as any))
-    if (!isNil(lastCons.cdr)) throw new TypeError(`append: A proper list must not end with ${printExpression(lastCons.cdr)}`)
+    if (!isNil(lastCons.cdr))
+      throw new TypeError(`append: A proper list must not end with ${printExpression(lastCons.cdr)}`)
     lastCons.cdr = list2
   })
 }
 
-export const fromArray = (arr: SExpression[], nilTerminated = false): Cons | Nil => {
-  if (arr.length === 0) return nil
+export interface FromArrayOptions {
+  notProper?: boolean
+  nonEmpty?: boolean
+}
+
+export function fromArray(
+  arr: [SExpression, ...SExpression[]],
+  options?: { notProper?: boolean, nonEmpty?: true }
+): Cons
+export function fromArray(
+  arr: SExpression[],
+  options?: FromArrayOptions
+): Cons | Nil
+export function fromArray(
+  arr: SExpression[],
+  options: FromArrayOptions = { notProper: false, nonEmpty: false }
+): Cons | Nil {
+  const { notProper, nonEmpty } = options
+  if (arr.length === 0 && !nonEmpty)
+    return nil
+  else if (nonEmpty)
+    throw new Error('Array must be non empty')
   const [first, ...rest] = arr
   let head = consProper(first)
 
   if (rest.length === 0) {
-    if (!nilTerminated) return head
+    if (!notProper) return head
     throw new Error('A cons list must have at least two elements')
   }
 
@@ -139,6 +169,52 @@ export const fromArray = (arr: SExpression[], nilTerminated = false): Cons | Nil
     pointer = nextCons
   }
   const last = rest[rest.length - 1]
-  pointer.cdr = !nilTerminated ? consProper(last) : last
+  pointer.cdr = notProper ? last : consProper(last)
   return head
 }
+
+export const unsafeLength = (xs: List): number => {
+  let i = 0
+  for (const _ of listToIterable(xs, false)) {
+    i++
+  }
+
+  return i
+}
+
+export const map = (fn: (s: SExpression) => SExpression) =>
+  produce<List>(draft => {
+    // TODO: fix types in produce
+    let expr: SExpression = draft as any
+    while (isCons(expr)) {
+      expr.car = fn(expr.car)
+      expr = expr.cdr
+    }
+  })
+
+export const foldl = (fn: (p: SExpression, c: SExpression) => SExpression, init?: SExpression) =>
+  (list: List) => {
+    let { acc, expr } = typeof init !== 'undefined'
+      ? { acc: init, expr: list as SExpression }
+      : { acc: car(list), expr: cdr(list) }
+
+    while (isCons(expr)) {
+      acc = fn(acc, expr.car)
+      expr = expr.cdr
+    }
+    
+    return acc
+  }
+
+export const foldr = (fn: (p: SExpression, c: SExpression) => SExpression, init: SExpression) =>
+  (list: List): SExpression => {
+    if (isNil(list)) return init
+    // let { acc, expr } = typeof init !== 'undefined'
+    //   ? { acc: init, expr: list as SExpression }
+    //   : { acc: car(list), expr: cdr(list) }
+
+    const x = car(list)
+    const rest = cdr(list)
+    
+    return isList(rest) ? fn(x, foldr(fn, init)(rest)) : rest
+  }

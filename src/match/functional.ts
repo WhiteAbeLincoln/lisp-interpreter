@@ -1,35 +1,53 @@
-import { Lazy, Refinement, Predicate, Equal } from './types'
+import { Refinement, Predicate, Equal, NoInfer, Refinement1, UnionToIntersection } from './types'
 
 /**
- * The identity function
+ * The I or identity combinator
+ * 
+ * takes a value and returns it
  * @param a a value
  */
-export const id = <A>(a: A) => a
+export const I = <A>(a: A) => a
+
+export { I as id }
+
 /**
- * Returns a function that always returns the given value
+ * The thrush combinator
+ * 
+ * takes a param `a` and applies it to the param `fn`
  * @param a a value
  */
-export const constant = <A>(a: A): Lazy<A> => () => a
+export const T = <A>(a: A) => <B>(fn: (a: A) => B) => fn(a)
+
+/**
+ * The K combinator
+ * 
+ * takes two values and returns the first
+ * @param a a value to be returned
+ */
+export const K = <A>(a: A) => <B>(_?: B) => a
+
+export { K as constant }
+
 /**
  * constant for `true`
  * @see constant
  */
-export const constTrue = constant<true>(true)
+export const constTrue = K<true>(true)
 /**
  * constant for `false`
  * @see constant
  */
-export const constFalse = constant<false>(false)
+export const constFalse = K<false>(false)
 /**
  * constant for `null`
  * @see constant
  */
-export const constNull = constant<null>(null)
+export const constNull = K(null)
 /**
  * constant for `undefined`
  * @see constant
  */
-export const constUndefined = constant(undefined)
+export const constUndefined = K(undefined)
 
 export function all<A, B extends A>(
   pred: Refinement<A, B>,
@@ -51,64 +69,40 @@ export function not<A>(pred: Predicate<A>): Predicate<A> {
   return a => !pred(a)
 }
 
-type OrRefine = <A, B1 extends A, B2 extends A>(
-  p1: Refinement<A, B1>,
-  p2: Refinement<A, B2>,
-) => Refinement<A, B1 | B2>
-type OrPred = <A>(p1: Predicate<A>, p2: Predicate<A>) => Predicate<A>
-type OrPred1 = <A, B extends A>(
-  p1: Refinement<A, B>,
-  p2: Predicate<A>,
-) => Predicate<A>
-type OrPred2 = <A, B extends A>(
-  p1: Predicate<A>,
-  p2: Refinement<A, B>,
-) => Predicate<A>
-type OrFn = OrRefine & OrPred & OrPred1 & OrPred2
-
-/**
- * Refinement version of the or predicate
- */
-export const orR: OrRefine = or
-export const orP: OrPred = or
-export const orP1: OrPred1 = or
-export const orP2: OrPred2 = or
-
-export function or<A, B1 extends A, B2 extends A>(
-  p1: Refinement<A, B1>,
-  p2: Refinement<A, B2>,
-): Refinement<A, B1 | B2>
+// we have the explicit two predicate case because predicates with generics don't work
+// if passed into the variadic function
+export function or<A, B extends A, B2 extends A>(
+  pred1: Refinement<A, B>,
+  pred2: Refinement<A, B2>,
+): Refinement<A, B | B2>
+export function or<A, B extends A, Bs extends A[]>(
+  pred1: Refinement<A, B>,
+  ...preds: ({ [k in keyof Bs]: Refinement1<A, Bs[k]> })
+): Refinement<A, B | Bs[number]>
 export function or<A, B extends A>(
-  p1: Refinement<A, B>,
-  p2: Predicate<A>,
+  ...preds: Array<Predicate<A> | Refinement<A, B>>
 ): Predicate<A>
-export function or<A, B extends A>(
-  p1: Predicate<A>,
-  p2: Refinement<A, B>,
-): Predicate<A>
-export function or<A>(p1: Predicate<A>, p2: Predicate<A>): Predicate<A>
-export function or<A>(p1: Predicate<A>, p2: Predicate<A>): Predicate<A> {
-  return a => p1(a) || p2(a)
+export function or<A>(...preds: Array<Predicate<A>>): Predicate<A> {
+  return a => preds.some(T(a))
 }
-
-/**
- * Used for verification that or implementation overloads match OrFn type
- * @internal
- */
-export const orVerify: Equal<OrFn, typeof or> = '1'
 
 export type AndTransitive = <A, B extends A, C extends B>(
   ab: Refinement<A, B>,
   bc: Refinement<B, C>,
 ) => Refinement<A, C>
-export type AndIntersection = <A, B1 extends A, B2 extends A>(
+export type AndIntersection = <A,
+  B1 extends A,
+  B2 extends A,
+  B extends A[] = [],
+  Ret = Equal<B, []> extends '1' ? B1 & B2 : B1 & B2 & UnionToIntersection<B[number]>>(
   p1: Refinement<A, B1>,
   p2: Refinement<A, B2>,
-) => Refinement<A, B1 & B2>
-export type AndPred = <A>(p1: Predicate<A>, p2: Predicate<A>) => Predicate<A>
-export type AndPred1 = <A, B extends A>(
+  ...preds: ({ [k in keyof B]: Refinement1<A, B[k]> })
+) => Refinement1<A, Ret>
+export type AndPred = <A>(...preds: Array<Predicate<A>>) => Predicate<A>
+export type AndPred1 = <A, B extends A = A>(
   p1: Predicate<A>,
-  p2: Refinement<A, B>,
+  ...preds: Array<Predicate<A> | Refinement<A, B>>
 ) => Refinement<A, B>
 export type AndPred2 = <A, B extends A>(
   p1: Refinement<A, B>,
@@ -133,10 +127,15 @@ export const andP: AndPred = and
 export const andP1: AndPred1 = and
 export const andP2: AndPred2 = and
 
-export function and<A, B1 extends A, B2 extends A>(
+export function and<A,
+  B1 extends A,
+  B2 extends A,
+  B extends A[] = [],
+  Ret = Equal<B, []> extends '1' ? B1 & B2 : B1 & B2 & UnionToIntersection<B[number]>>(
   p1: Refinement<A, B1>,
   p2: Refinement<A, B2>,
-): Refinement<A, B1 & B2>
+  ...preds: ({ [k in keyof B]: Refinement1<A, B[k]> })
+): Refinement1<A, Ret>
 export function and<A, B extends A, C extends B>(
   ab: Refinement<A, B>,
   bc: Refinement<B, C>,
@@ -149,9 +148,9 @@ export function and<A, B extends A>(
   p1: Predicate<A>,
   p2: Refinement<A, B>,
 ): Refinement<A, B>
-export function and<A>(p1: Predicate<A>, p2: Predicate<A>): Predicate<A>
-export function and<A>(p1: Predicate<A>, p2: Predicate<A>): Predicate<A> {
-  return (a: A) => p1(a) && p2(a)
+export function and<A, B extends A = A>(...preds: Array<Predicate<A> | Refinement<A, B>>): Refinement<A, B>
+export function and<A>(...preds: Array<Predicate<A>>): Predicate<A> {
+  return a => preds.every(T(a))
 }
 
 /**

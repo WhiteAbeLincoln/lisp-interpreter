@@ -1,4 +1,4 @@
-import { andT, all, and, orR, or } from './functional'
+import { andT, all, and, or } from './functional'
 import {
   Refinement,
   RefinementTo,
@@ -64,21 +64,21 @@ export const missing = or(typeOf('undefined'), isNull)
  * @param pred a refinement predicate
  */
 export const optional = <A, B extends A>(pred: Refinement<A, B>) =>
-  orR(typeOf('undefined'), pred)
+  or(typeOf('undefined'), pred)
 
 /**
  * Extends a refinement predicate to refine to some type | null
  * @param pred a refinement predicate
  */
 export const nullable = <A, B extends A>(pred: Refinement<A, B>) =>
-  orR(isNull, pred)
+  or(isNull, pred)
 
 /**
  * Extends a refinement predicate to refine to some type | null | undefined
  * @param pred a refinement predicate
  */
 export const maybeable = <A, B extends A>(pred: Refinement<A, B>) =>
-  orR(missing, pred)
+  or(missing, pred)
 
 /**
  * A refinement predicate to a literal value

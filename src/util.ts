@@ -1,5 +1,6 @@
 export type Predicate<T> = (a: T) => boolean;
 export type Refinement<A, B extends A> = (a: A) => a is B;
+export const symDesc = (a: symbol) => (a as typeof a & { description?: string }).description
 
 export const truthy = <T>(
   v: T

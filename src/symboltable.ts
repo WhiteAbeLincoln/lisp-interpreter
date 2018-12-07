@@ -1,8 +1,8 @@
 import { SExpression, printExpression } from './interpreter'
 import { Cons, cdr, isCons, car, isProperList, cons,
-  map, unsafeLength, isList, fromArray, listToIterable, ConsG } from './Cons'
+  map, unsafeLength, isList, fromArray, listToIterable, ConsG, reduce, reduce1 } from './Cons'
 import mem from 'mem'
-import { filterMap, mapFilter, truthy } from './util';
+import { Fn, gt, lt, lte, gte, eq, add, sub, div, mult } from './util'
 
 export const symExpr: <T extends string>(value: T) => symbol & { description: T } =
   mem((value: string) => Symbol(value) as any)
@@ -138,13 +138,17 @@ export const evalFn = (table: SymbolTable) => (arg: SExpression): SExpression =>
   // return executeFn(table)(fn, arg, fnSymRef)
 }
 
+function validate(fncall: Cons, arglen: [5, number], proper?: boolean): ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, SExpression>>>>>
+function validate(fncall: Cons, arglen: [4, number], proper?: boolean): ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, SExpression>>>>
+function validate(fncall: Cons, arglen: [3, number], proper?: boolean): ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, SExpression>>>
+function validate(fncall: Cons, arglen: [2, number], proper?: boolean): ConsG<SExpression, ConsG<SExpression, SExpression>>
+function validate(fncall: Cons, arglen: [1, number], proper?: boolean): ConsG<SExpression, SExpression>
 function validate(fncall: Cons, arglen: 5, proper?: true): ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, Nil>>>>>
 function validate(fncall: Cons, arglen: 4, proper?: true): ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, Nil>>>>
 function validate(fncall: Cons, arglen: 3, proper?: true): ConsG<SExpression, ConsG<SExpression, ConsG<SExpression, Nil>>>
 function validate(fncall: Cons, arglen: 2, proper?: true): ConsG<SExpression, ConsG<SExpression, Nil>>
 function validate(fncall: Cons, arglen: 1, proper?: true): ConsG<SExpression, Nil>
 function validate(fncall: Cons, arglen: number | [number, number], proper?: true): Cons
-function validate(fncall: Cons, arglen: number | [number, number], proper: false): SExpression
 function validate(fncall: Cons, arglen: number | [number, number], proper?: boolean): SExpression
 function validate(fncall: Cons, arglen: number | [number, number], proper = true): SExpression {
   const { car: fnNameSym, cdr: args } = fncall
@@ -155,7 +159,10 @@ function validate(fncall: Cons, arglen: number | [number, number], proper = true
   const name = (fnNameSym as symbol).description || (fnNameSym as LambdaValue).kind
   if (proper && !isProperList(args))
     throw new TypeError(`argument list given to ${name} is dotted: ${printExpression(fncall)}`)
-  if (!isList(args)) return args
+  if (!isList(args)) {
+    if (!Array.isArray(arglen)) return args
+    throw new TypeError(`argument list given to ${name} is dotted: ${printExpression(fncall)}`)
+  }
 
   // TODO: this can loop infinitely if args has a cycle
   const len = unsafeLength(args)
@@ -236,6 +243,46 @@ const createSpecial = (fn: (fncall: Cons) => SExpression): SpecialFormValue => {
   (fn as SpecialFormValue).kind = 'special'
   return fn as SpecialFormValue
 }
+
+const createComparison = (op: Fn<[number, number], boolean>): SymbolTableFn => ({
+  kind: 'lambda',
+  value: _table => createLambda(fncall => {
+      const args = validate(fncall, [1, Infinity], false)
+
+      const argsArr = [...listToIterable(args, false)]
+      for (let i = 1; i < argsArr.length; i++) {
+        const first = argsArr[i - 1]
+        const second = argsArr[i]
+        if (typeof first !== 'number')
+          throw new TypeError(`${printExpression(first)} is not a number`)
+        if (typeof second !== 'number')
+          throw new TypeError(`${printExpression(second)} is not a number`)
+
+        if (op(first, second)) continue
+        else return nil
+      }
+      return t
+    })
+})
+
+const createAccumulation = (op: Fn<[number, number], number>, identity: number): SymbolTableFn => ({
+  kind: 'lambda',
+  value: _table => createLambda(fncall => {
+    const { cdr: args } = fncall
+    return reduce(op, identity, (x): x is number => typeof x === 'number')(args)
+  })
+})
+
+const createAccumulation1 = (op: Fn<[number, number], number>, identity: number): SymbolTableFn => ({
+  kind: 'lambda',
+  value: _table => createLambda(fncall => {
+    const { car: first, cdr: rest } = validate(fncall, [1, Infinity], false)
+    if (typeof first !== 'number')
+      throw new TypeError(`${printExpression(first)} is not a real number`)
+    if (!isCons(rest)) return op(identity, first)
+    return reduce1(op, (x): x is number => typeof x === 'number')(cons(first, rest))
+  })
+})
 
 const symboltableTable: SymbolTable['table'] = new Map<symbol, SymbolTableEntry>([
   [t, { kind: 'symbol', value: t }],
@@ -354,7 +401,44 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SymbolTableEntry>
         throw new TypeError(`Cannot append ${printExpression(s1)} and ${printExpression(s2)} as they are not both strings`)
       return s1 + s2
     })
-  }]
+  }],
+  [symExpr('cond'), {
+    kind: 'special',
+    value: table => createSpecial(fncall => {
+      const { cdr: arglist } = fncall
+      if (!isCons(arglist))
+        return nil
+      for (const pair of listToIterable(arglist, false)) {
+        if (!isCons(pair))
+          throw new TypeError(`clause ${printExpression(pair)} should be a list`)
+        const predicate = car(pair)
+        const result = cdr(pair)
+        const predEvaled = evalFn(table)(predicate)
+        if (predEvaled === nil) continue
+        if (!isCons(result)) return predEvaled
+        return evalFn(table)(car(result))
+      }
+      return nil
+    })
+  }],
+  [symExpr('if'), {
+    kind: 'special',
+    value: table => createSpecial(fncall => {
+      const { car: pred, cdr: { car: truth, cdr: { car: falsehood } } } = validate(fncall, 3) 
+      const predEvaled = evalFn(table)(pred)
+      if (predEvaled !== nil) return evalFn(table)(truth)
+      return evalFn(table)(falsehood)
+    })
+  }],
+  [symExpr('>'), createComparison(gt)],
+  [symExpr('>='), createComparison(gte)],
+  [symExpr('<'), createComparison(lt)],
+  [symExpr('<='), createComparison(lte)],
+  [symExpr('='), createComparison(eq)],
+  [symExpr('+'), createAccumulation(add, 0)],
+  [symExpr('*'), createAccumulation(mult, 1)],
+  [symExpr('-'), createAccumulation1(sub, 0)],
+  [symExpr('/'), createAccumulation1(div, 1)],
 ])
 
 export const symboltable = { parent: null, table: symboltableTable }

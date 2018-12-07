@@ -3,6 +3,7 @@ import { last } from "./iterable"
 import produce from 'immer'
 import { or, and } from "./match/functional"
 import { Nil, isNil, nil } from './symboltable'
+import { Refinement } from './match/types';
 
 export type Cons = {
   kind: 'cons'
@@ -49,8 +50,8 @@ export const consProper = (car: SExpression): Cons => cons(car, nil)
  * 
  * @param c a cons
  */
-export function* listToIterable(c: List, yieldLast: boolean = true) {
-  let expr: SExpression = c
+export function* listToIterable(c: SExpression, yieldLast: boolean = true) {
+  let expr = c
   while (isCons(expr)) {
     yield expr.car
     expr = expr.cdr
@@ -79,12 +80,16 @@ export function* iterateCons(c: Cons) {
 export function cdr<A extends ConsG<any, any>>(v: A): A extends ConsG<any, infer C> ? C : never
 export function cdr(v: List): SExpression
 export function cdr(v: List): SExpression {
-  return isNil(v) ? v : v.cdr
+  if (isNil(v)) return v
+  if (isCons(v)) return v.cdr
+  throw new TypeError(`${printExpression(v)} is not a list`)
 } 
 export function car<A extends ConsG<any, any>>(v: A): A extends ConsG<infer C, any> ? C : never
 export function car(v: List): SExpression
 export function car(v: List): SExpression {
-  return isNil(v) ? v : v.car
+  if (isNil(v)) return v
+  if (isCons(v)) return v.car
+  throw new TypeError(`${printExpression(v)} is not a list`)
 } 
 // really the type should be (...lists: List[], lastList: SExpression)
 // or (...lists: [...List[], SExpression])
@@ -205,6 +210,34 @@ export const map = (fn: (s: SExpression) => SExpression) =>
       expr = expr.cdr
     }
   })
+
+export const reduce = <A extends SExpression>(fn: (p: A, c: A) => A, init: A, typeValidator: Refinement<SExpression, A>) =>
+  (list: SExpression) => {
+    let acc = init
+    for (const val of listToIterable(list, false)) {
+      if (!typeValidator(val))
+        throw new TypeError(`${printExpression(val)} is not the correct type`)
+      acc = fn(acc, val)
+    }
+
+    return acc
+  }
+
+export const reduce1 = <A extends SExpression>(fn: (p: A, c: A) => A, typeValidator: Refinement<SExpression, A>) =>
+  (list: Cons) => {
+    let acc = car(list)
+    const rest = cdr(list)
+
+    for (const val of listToIterable(rest, false)) {
+      if (!typeValidator(acc))
+        throw new TypeError(`${printExpression(acc)} is not the correct type`)
+      if (!typeValidator(val))
+        throw new TypeError(`${printExpression(val)} is not the correct type`)
+      acc = fn(acc, val)
+    }
+
+    return acc
+  }
 
 export const foldl = (fn: (p: SExpression, c: SExpression) => SExpression, init?: SExpression) =>
   (list: List) => {

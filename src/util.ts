@@ -1,5 +1,4 @@
-import { NoInfer } from './match/types';
-
+export type Fn<A extends any[], R> = (...args: A) => R
 export type Predicate<T> = (a: T) => boolean;
 export type Refinement<A, B extends A> = (a: A) => a is B;
 export const symDesc = (a: symbol) => (a as typeof a & { description?: string }).description
@@ -40,8 +39,6 @@ export function filterMap<A, B>(
 
   return output
 }
-
-const test = <X>(a: X) => (b: X) => b
 
 export function mapFilter
   <A>(xs: A[]):
@@ -209,3 +206,13 @@ export function compose(...fns: Array<Function>): Function {
 }
 
 export const id = <T>(x: T) => x
+
+export const gt = (x: number, y: number) => x > y
+export const gte = (x: number, y: number) => x >= y
+export const lt = (x: number, y: number) => x < y
+export const lte = (x: number, y: number) => x <= y
+export const eq = (x: number, y: number) => x === y
+export const add = (x: number, y: number) => x + y
+export const sub = (x: number, y: number) => x - y
+export const mult = (x: number, y: number) => x * y
+export const div = (x: number, y: number) => x / y

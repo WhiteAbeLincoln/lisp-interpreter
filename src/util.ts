@@ -1,3 +1,5 @@
+import mem from 'mem'
+
 export type Fn<A extends any[], R> = (...args: A) => R
 export type Predicate<T> = (a: T) => boolean;
 export type Refinement<A, B extends A> = (a: A) => a is B;
@@ -146,62 +148,74 @@ export class Reader<T> {
   }
 }
 
-export function compose<A, B, C>(bc: (b: B) => C, ab: (a: A) => B): (a: A) => C
-export function compose<A, B, C, D>(cd: (c: C) => D, bc: (b: B) => C, ab: (a: A) => B): (a: A) => D
-export function compose<A, B, C, D, E>(de: (d: D) => E, cd: (c: C) => D, bc: (b: B) => C, ab: (a: A) => B): (a: A) => E
-export function compose<A, B, C, D, E, F>(
-  ef: (e: E) => F,
-  de: (d: D) => E,
-  cd: (c: C) => D,
-  bc: (b: B) => C,
-  ab: (a: A) => B
-): (a: A) => F
-export function compose<A, B, C, D, E, F, G>(
-  fg: (f: F) => G,
-  ef: (e: E) => F,
-  de: (d: D) => E,
-  cd: (c: C) => D,
-  bc: (b: B) => C,
-  ab: (a: A) => B
-): (a: A) => G
-export function compose<A, B, C, D, E, F, G, H>(
-  gh: (g: G) => H,
-  fg: (f: F) => G,
-  ef: (e: E) => F,
-  de: (d: D) => E,
-  cd: (c: C) => D,
-  bc: (b: B) => C,
-  ab: (a: A) => B
-): (a: A) => H
-export function compose<A, B, C, D, E, F, G, H, I>(
-  hi: (h: H) => I,
-  gh: (g: G) => H,
-  fg: (f: F) => G,
-  ef: (e: E) => F,
-  de: (d: D) => E,
-  cd: (c: C) => D,
-  bc: (b: B) => C,
-  ab: (a: A) => B
-): (a: A) => I
-export function compose<A, B, C, D, E, F, G, H, I, J>(
-  ij: (i: I) => J,
-  hi: (h: H) => I,
-  gh: (g: G) => H,
-  fg: (f: F) => G,
-  ef: (e: E) => F,
-  de: (d: D) => E,
-  cd: (c: C) => D,
-  bc: (b: B) => C,
-  ab: (a: A) => B
-): (a: A) => J
+export function compose<As extends any[], B, C>(
+  bc: Fn<[B], C>,
+  ab: Fn<As, B>,
+): Fn<As, C>
+export function compose<As extends any[], B, C, D>(
+  cd: Fn<[C], D>,
+  bc: Fn<[B], C>,
+  ab: Fn<As, B>,
+): Fn<As, D>
+export function compose<As extends any[], B, C, D, E>(
+  de: Fn<[D], E>,
+  cd: Fn<[C], D>,
+  bc: Fn<[B], C>,
+  ab: Fn<As, B>,
+): Fn<As, E>
+export function compose<As extends any[], B, C, D, E, F>(
+  ef: Fn<[E], F>,
+  de: Fn<[D], E>,
+  cd: Fn<[C], D>,
+  bc: Fn<[B], C>,
+  ab: Fn<As, B>,
+): Fn<As, F>
+export function compose<As extends any[], B, C, D, E, F, G>(
+  fg: Fn<[F], G>,
+  ef: Fn<[E], F>,
+  de: Fn<[D], E>,
+  cd: Fn<[C], D>,
+  bc: Fn<[B], C>,
+  ab: Fn<As, B>,
+): Fn<As, G>
+export function compose<As extends any[], B, C, D, E, F, G, H>(
+  gh: Fn<[G], H>,
+  fg: Fn<[F], G>,
+  ef: Fn<[E], F>,
+  de: Fn<[D], E>,
+  cd: Fn<[C], D>,
+  bc: Fn<[B], C>,
+  ab: Fn<As, B>,
+): Fn<As, H>
+export function compose<As extends any[], B, C, D, E, F, G, H, I>(
+  hi: Fn<[H], I>,
+  gh: Fn<[G], H>,
+  fg: Fn<[F], G>,
+  ef: Fn<[E], F>,
+  de: Fn<[D], E>,
+  cd: Fn<[C], D>,
+  bc: Fn<[B], C>,
+  ab: Fn<As, B>,
+): Fn<As, I>
+export function compose<As extends any[], B, C, D, E, F, G, H, I, J>(
+  ij: Fn<[I], J>,
+  hi: Fn<[H], I>,
+  gh: Fn<[G], H>,
+  fg: Fn<[F], G>,
+  ef: Fn<[E], F>,
+  de: Fn<[D], E>,
+  cd: Fn<[C], D>,
+  bc: Fn<[B], C>,
+  ab: Fn<As, B>,
+): Fn<As, J>
 export function compose(...fns: Array<Function>): Function {
   const len = fns.length - 1
-  return function(this: any, x: any) {
-    let y = x
+  return function(this: any, ...args: any[]) {
+    let y = args
     for (let i = len; i > -1; i--) {
-      y = fns[i].call(this, y)
+      y = [fns[i].call(this, ...y)]
     }
-    return y
+    return y[0]
   }
 }
 
@@ -216,3 +230,6 @@ export const add = (x: number, y: number) => x + y
 export const sub = (x: number, y: number) => x - y
 export const mult = (x: number, y: number) => x * y
 export const div = (x: number, y: number) => x / y
+
+export const symExpr: <T extends string>(value: T) => symbol & { description: T } =
+  mem((value: string) => Symbol(value) as any)

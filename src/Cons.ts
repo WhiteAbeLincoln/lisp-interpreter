@@ -1,15 +1,10 @@
-import { SExpression, printExpression } from "./interpreter"
 import { last } from "./iterable"
 import produce from 'immer'
 import { or, and } from "./match/functional"
-import { Nil, isNil, nil } from './symboltable'
-import { Refinement } from './match/types';
-
-export type Cons = {
-  kind: 'cons'
-  car: SExpression
-  cdr: SExpression
-}
+import { Refinement } from './match/types'
+import { printExpression } from './print'
+import { Nil, isNil, nil } from './symboltable/common-symbols'
+import { SExpression, Cons } from './SExpression'
 
 export interface ConsG<Car extends SExpression = SExpression, Cdr extends SExpression = SExpression> extends Cons {
   kind: 'cons'
@@ -201,15 +196,15 @@ export const unsafeLength = (xs: List): number => {
   return i
 }
 
-export const map = (fn: (s: SExpression) => SExpression) =>
-  produce<List>(draft => {
-    // TODO: fix types in produce
-    let expr: SExpression = draft as any
-    while (isCons(expr)) {
-      expr.car = fn(expr.car)
-      expr = expr.cdr
-    }
-  })
+export const map = (fn: (s: SExpression) => SExpression) => (list: List) => {
+  let expr: SExpression = list
+  const arr: SExpression[] = []
+  while (isCons(expr)) {
+    arr.push(fn(expr.car))
+    expr = expr.cdr
+  }
+  return fromArray(arr)
+}
 
 export const reduce = <A extends SExpression>(fn: (p: A, c: A) => A, init: A, typeValidator: Refinement<SExpression, A>) =>
   (list: SExpression) => {

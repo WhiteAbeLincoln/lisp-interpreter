@@ -1,4 +1,8 @@
-import { Shift } from './types'
+export type Tail<T extends any[]> = T extends []
+  ? never
+  : ((...x: T) => any) extends (x: any, ...rest: infer XS) => any
+  ? XS
+  : never
 
 export type IsFinite<Tuple extends any[], Finite, Infinite> = {
   empty: Finite
@@ -81,7 +85,7 @@ export type Pop<Tuple extends any[]> = {
   infinite: Tuple
   empty: Tuple
   single: []
-  finite: Reverse<Shift<Reverse<Tuple>>>
+  finite: Reverse<Tail<Reverse<Tuple>>>
 }[Tuple extends []
   ? 'empty'
   : Tuple extends [any] ? 'single' : IsFinite<Tuple, 'finite', 'infinite'>]

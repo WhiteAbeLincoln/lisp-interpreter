@@ -119,15 +119,12 @@ export type Head<T extends any[]> = T extends []
   : ((...x: T) => any) extends (x: infer X, ...rest: any[]) => any
   ? X
   : never
-export type Tail<T extends any[]> = T extends []
-  ? never
-  : ((...x: T) => any) extends (x: any, ...rest: infer XS) => any
-  ? XS
-  : never
+
+export { Tail } from './util-types'
 
 export type Push<T extends any[], V> = Append<T, V>
 export type Unshift<T extends any[], V> = Prepend<T, V>
 export type Pop<T extends any[]> = utils.Pop<T>
-export type Shift<T extends any[]> = Tail<T>
+export type Shift<T extends any[]> = utils.Tail<T>
 export type First<T> = T extends any[] ? T[0] : never
 export type Last<T> = utils.Last<T>

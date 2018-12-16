@@ -1,7 +1,8 @@
 import repl from 'repl'
-import { interpreter, printExpression } from './interpreter'
+import { interpreter } from './interpreter'
 import vm from 'vm'
 import { spawn } from 'child_process'
+import { printExpression } from './print'
 
 const specialMode = (name: string) => RegExp(`^\\s*:${name}`)
 const sAst = specialMode('ast')

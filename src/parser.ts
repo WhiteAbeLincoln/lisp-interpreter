@@ -3,10 +3,10 @@ import {
   CloseParen, isDotDelim, isNum, isQuote,
   isString, isSymbol, NumToken, OpenParen,
   ParenToken, printToken, StringToken, SymToken,
-  Token
+  Token, QuoteToken, lexer
 } from './lexer'
 import { or } from './match/functional'
-import { quoteSym, nil } from './symboltable/common-symbols'
+import { quoteSym, nil, quasiquoteSym, unquoteSym, unquoteSpliceSym } from './symboltable/common-symbols'
 import { arrayReadFun, Reader, Refinement, symExpr } from './util'
 import { SExpression, Cons } from './SExpression'
 
@@ -20,7 +20,15 @@ const isCloseparen = (tok: Token): tok is CloseParen =>
   isParen(tok) && tok.value === 'close'
   isCloseparen.matches = ')' as ')'
 
-const quoteSexpr = (e: SExpression) => cons(quoteSym, consProper(e))
+export const quoteSexpr = (e: SExpression, type: QuoteToken['value']) =>
+  cons(
+      type === 'quote'            ? quoteSym
+    : type === 'quasiquote'       ? quasiquoteSym
+    : type === 'unquote'          ? unquoteSym
+    : type === 'unquote-splicing' ? unquoteSpliceSym
+    : type
+    , consProper(e)
+  )
 
 const isAtom = (e: Token): e is StringToken | NumToken | SymToken =>
   e.kind === 'string'
@@ -71,7 +79,7 @@ export const parser = (toks: Token[]) => {
   }
 
   const list = (first?: SExpression): Cons => {
-    if (!first) {
+    if (typeof first === 'undefined') {
       match(isOpenparen)
       first = sexp()
     }
@@ -113,8 +121,8 @@ export const parser = (toks: Token[]) => {
   }
 
   const qte = () => {
-    match(isQuote)
-    return quoteSexpr(sexp())
+    const val = match(isQuote)
+    return quoteSexpr(sexp(), val.value)
   }
 
   const match = <B extends Token>(

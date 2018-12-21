@@ -10,6 +10,9 @@ const sTokens = specialMode('tokens')
 const sEval = specialMode('eval')
 const sJs = specialMode('js')
 const sShell = specialMode('!')
+const sExpand = specialMode('expand')
+
+let expand = false
 
 export const replserver = () =>
   repl.start({
@@ -40,15 +43,17 @@ export const replserver = () =>
         const shell = spawn('/bin/bash', ['-c', command])
         // we should be able to write multiple times and then end
         // however repl doesn't let us do that
-        let data = ''
-        const accum = (str: any) => {
-          data += String(str)
-        }
-        shell.stderr.on('data', accum)
-        shell.stdout.on('data', accum)
+        shell.stderr.pipe(process.stderr)
+        shell.stdout.pipe(process.stdout)
         shell.on('close', () => {
-          cb(null, data)
+          cb(null, null)
         })
+        return
+      } else if (sExpand.test(command)) {
+        command = command.replace(sExpand, '')
+        if (command.trim() === 't') expand = true
+        else expand = false
+        cb(null, null)
         return
       }
       try {
@@ -60,9 +65,8 @@ export const replserver = () =>
       cb(null, result);
     },
     writer: output => {
-      if (typeof output === 'undefined') return ''
-      return Array.isArray(output) ? output.map(printExpression).join('\n') : printExpression(output)
-      // return (Array.isArray(output) && !(output as any).kind) || typeof output === 'undefined' ? '' : printExpression(output)
+      if (output == null) return ''
+      return Array.isArray(output) ? output.map(v => printExpression(v, expand)).join('\n') : printExpression(output, expand)
     }
   });
 

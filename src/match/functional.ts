@@ -1,8 +1,10 @@
-import { Refinement, Predicate, Equal, NoInfer, Refinement1, UnionToIntersection } from './types'
+import { Refinement, Predicate, Equal, Refinement1, UnionToIntersection } from './types'
+
+export type Fn<A extends any[], R> = (...args: A) => R
 
 /**
  * The I or identity combinator
- * 
+ *
  * takes a value and returns it
  * @param a a value
  */
@@ -12,7 +14,7 @@ export { I as id }
 
 /**
  * The thrush combinator
- * 
+ *
  * takes a param `a` and applies it to the param `fn`
  * @param a a value
  */
@@ -20,7 +22,7 @@ export const T = <A>(a: A) => <B>(fn: (a: A) => B) => fn(a)
 
 /**
  * The K combinator
- * 
+ *
  * takes two values and returns the first
  * @param a a value to be returned
  */
@@ -167,3 +169,18 @@ export const xor = <A>(p: Predicate<A>, q: Predicate<A>): Predicate<A> => a =>
  * @param args elements of the tuple
  */
 export const tuple = <T extends any[]>(...args: T) => args
+
+export function flip<R>(fn: <A, B>(a: A, b: B) => R): <A, B>(b: B, a: A) => R
+export function flip<R>(fn: <A>(a: A, b: A) => R): <A>(b: A, a: A) => R
+export function flip<Fixed, R>(
+  fn: <A>(a: A, b: Fixed) => R,
+): <A>(b: Fixed, a: A) => R
+export function flip<Fixed, R>(
+  fn: <B>(a: Fixed, b: B) => R,
+): <B>(b: B, a: Fixed) => R
+export function flip<Fixed1, Fixed2, R>(
+  fn: Fn<[Fixed1, Fixed2], R>,
+): Fn<[Fixed2, Fixed1], R>
+export function flip<A, B, C>(fn: Fn<[A, B], C>): (b: B, a: A) => C {
+  return (b, a) => fn(a, b)
+}

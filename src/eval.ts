@@ -1,19 +1,24 @@
 import {
-  SymbolTable, getSymbol, 
-  validate, setValue, pushTable, 
+  SymbolTable, getSymbol,
+  validate, setValue, pushTable,
 } from './symboltable/symboltable'
-import { isCons, car, listToIterable, cdr, map, isList } from './Cons'
+import {
+  isCons, car, listToIterable,
+  cdr, map, isList, fromArray,
+  cons, append
+} from './Cons'
 import { printExpression } from './print'
 import {
   quoteSym, ifSym, nil, condSym,
-  defineSym, lambdaSym 
+  defineSym, lambdaSym, quasiquoteSym,
+  unquoteSym, unquoteSpliceSym
 } from './symboltable/common-symbols'
 import { SExpression, Cons, LambdaParam, isLambdaFn, isBoostrapFn } from './SExpression'
 
 const argumentlist = (arglist: SExpression): LambdaParam[] => {
   if (arglist === nil) return []
   if (typeof arglist === 'symbol') return [{ sym: arglist, variadic: true }]
-  if (!isCons(arglist)) throw new TypeError(`${printExpression(arglist)} is not an argument list`) 
+  if (!isCons(arglist)) throw new TypeError(`${printExpression(arglist)} is not an argument list`)
   const arr: Array<{ sym: symbol, variadic?: true }> = []
   const list = [...listToIterable(arglist)]
   for (let i = 0; i < list.length; ++i) {
@@ -101,6 +106,33 @@ function evalSExpression(env: SymbolTable, arg: SExpression): SExpression {
   return arg
 }
 
+const quasiquote = (ast: SExpression, env: SymbolTable): SExpression => {
+  if (!isCons(ast)) return ast
+
+  const astList = [...listToIterable(ast, false)]
+  const [arg1, arg2] = astList
+
+  if (arg1 === unquoteSym) {
+    if (typeof arg2 === 'undefined')
+      throw new Error(`unquote: takes exactly one argument`)
+    return evalFn(env, arg2)
+  }
+
+  if (isCons(arg1)) {
+    const [firstFirst, secondFirst] = listToIterable(arg1, false)
+    if (firstFirst === unquoteSpliceSym) {
+      if (typeof secondFirst === 'undefined')
+        throw new Error(`unquote-splicing: takes exactly one argument`)
+      return append([evalFn(env, secondFirst), quasiquote(fromArray(astList.slice(1)), env)])
+    }
+  }
+
+  return cons(
+      quasiquote(arg1, env)
+    , quasiquote(fromArray(astList.slice(1)), env)
+    )
+}
+
 export const evalFn = (env: SymbolTable, expr: SExpression): SExpression => {
   loop: while(true) {
     if (!isCons(expr)) {
@@ -121,10 +153,18 @@ export const evalFn = (env: SymbolTable, expr: SExpression): SExpression => {
           // return the argument unevaluated
           return arg
         }
+        case unquoteSym:
+        case unquoteSpliceSym: {
+          throw new Error('unquote: not in quasiquote')
+        }
+        case quasiquoteSym: {
+          const { car: ast } = validate(expr, 1)
+          return quasiquote(ast, env)
+        }
         case ifSym: {
-          const { car: pred, cdr: { car: truth, cdr: { car: falsehood } } } = validate(expr, 3) 
+          const { car: pred, cdr: { car: truth, cdr: { car: falsehood } } } = validate(expr, 3)
           const predEvaled = evalFn(env, pred)
-          if (predEvaled !== nil) 
+          if (predEvaled !== nil)
             expr = truth
           else
             expr = falsehood
@@ -161,7 +201,7 @@ export const evalFn = (env: SymbolTable, expr: SExpression): SExpression => {
         case lambdaSym: {
           /* a lambda is composed of 2 parts
             1. the argument list:
-              An argument list is either 
+              An argument list is either
               a. a naked symbol - this indicates a variadic function accepting any number of parameters
                 that will be bound to the symbol
               b. a proper list of symbols - this indicates a function with arity equal to the list's length

@@ -1,6 +1,6 @@
-import { last } from "./iterable"
+import { last, reduceRightEager } from './iterable'
 import produce from 'immer'
-import { or, and } from "./match/functional"
+import { or, and, flip } from './match/functional'
 import { Refinement } from './match/types'
 import { printExpression } from './print'
 import { Nil, isNil, nil } from './symboltable/common-symbols'
@@ -20,8 +20,8 @@ export const isCons = (c: SExpression): c is Cons =>
 export const isList = or(isNil, isCons)
 
 /**
- * 
- * @param c 
+ *
+ * @param c
  */
 export const isProperList = and(isList, (c: List) => isNil(last(listToIterable(c))))
 
@@ -37,12 +37,12 @@ export const consProper = (car: SExpression): Cons => cons(car, nil)
  *
  * Converts a cons into an iterable whose
  * elements are every car of the cons and the final cdr
- * 
+ *
  * Does not follow tree-like cons structures
- * 
+ *
  * given (1 . (2 . (3 . nil)))
  * 1 2 3 nil
- * 
+ *
  * @param c a cons
  */
 export function* listToIterable(c: SExpression, yieldLast: boolean = true) {
@@ -61,7 +61,7 @@ export function* listToIterable(c: SExpression, yieldLast: boolean = true) {
  * (1 . (2 . (3 . nil)))
  * (2 . (3 . nil))
  * (3 . nil)```
- * 
+ *
  * @param c a cons
  */
 export function* iterateCons(c: Cons) {
@@ -78,14 +78,14 @@ export function cdr(v: List): SExpression {
   if (isNil(v)) return v
   if (isCons(v)) return v.cdr
   throw new TypeError(`${printExpression(v)} is not a list`)
-} 
+}
 export function car<A extends ConsG<any, any>>(v: A): A extends ConsG<infer C, any> ? C : never
 export function car(v: List): SExpression
 export function car(v: List): SExpression {
   if (isNil(v)) return v
   if (isCons(v)) return v.car
   throw new TypeError(`${printExpression(v)} is not a list`)
-} 
+}
 // really the type should be (...lists: List[], lastList: SExpression)
 // or (...lists: [...List[], SExpression])
 // but we cant have a non-rest param follow a rest
@@ -95,7 +95,8 @@ export function car(v: List): SExpression {
  * the last argument may be any object,
  * the remaining arguments must be proper lists
  */
-export const append = (...lists: List[]) => {
+export const append = (lists: Iterable<SExpression>) =>
+  reduceRightEager(lists as Iterable<List>, flip(appendTwo), nil as SExpression)
   /*
     we reduce over the right because that should shorten
     the length of the linked list that we have to traverse
@@ -124,8 +125,7 @@ export const append = (...lists: List[]) => {
             ([7,8] `appendTwo` [])))
       '(1 2 3 4 5 6 7 8)
   */
- return lists.reduceRight((p, c) => appendTwo(c, p), nil as SExpression)
-}
+
 export const appendTwo = (list1: List, list2: SExpression) => {
   if (isNil(list1)) return list2
   if (isNil(list2)) return list1
@@ -138,7 +138,7 @@ export const appendTwo = (list1: List, list2: SExpression) => {
   // but implementing sharing like Immutable uses
   // also, immer assumes our input to be a tree
   return produce(list1, draft => {
-    const lastCons = last(iterateCons(draft as any))
+    const lastCons = last(iterateCons(draft))
     if (!isNil(lastCons.cdr))
       throw new TypeError(`append: A proper list must not end with ${printExpression(lastCons.cdr)}`)
     lastCons.cdr = list2
@@ -154,6 +154,10 @@ export function fromArray(
   arr: [SExpression, ...SExpression[]],
   options?: { notProper?: boolean, nonEmpty?: true }
 ): Cons
+export function fromArray(
+  arr: [],
+  options?: FromArrayOptions
+): Nil
 export function fromArray(
   arr: SExpression[],
   options?: FromArrayOptions
@@ -244,7 +248,7 @@ export const foldl = (fn: (p: SExpression, c: SExpression) => SExpression, init?
       acc = fn(acc, expr.car)
       expr = expr.cdr
     }
-    
+
     return acc
   }
 
@@ -257,6 +261,6 @@ export const foldr = (fn: (p: SExpression, c: SExpression) => SExpression, init:
 
     const x = car(list)
     const rest = cdr(list)
-    
+
     return isList(rest) ? fn(x, foldr(fn, init)(rest)) : rest
   }

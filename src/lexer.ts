@@ -12,7 +12,10 @@ export type SymToken = { kind: 'symbol'; value: string } & TokenBase
 export type NumToken = { kind: 'number'; value: number } & TokenBase
 export type StringToken = { kind: 'string'; value: string } & TokenBase
 export type ListDelimToken = { kind: 'dot'; value: '.' } & TokenBase
-export type QuoteToken = { kind: 'quote'; value: '\'' } & TokenBase
+export type QuoteToken = {
+  kind: 'quote'
+  value: 'quote' | 'quasiquote' | 'unquote' | 'unquote-splicing'
+} & TokenBase
 export type Token = SymToken | NumToken | ParenToken | StringToken | ListDelimToken | QuoteToken
 
 export const isNum = (tok: Token): tok is NumToken => tok.kind === "number";
@@ -162,22 +165,57 @@ export const lexer = (input: string) => {
       // read until eof or newline
       do {
         c = read()
-      } while (c !== '\n' && c !== '')
+        /* matching the behavior of racket, line comment is read until the next
+          - linefeed
+          - carriage return
+          - unicode NEXT LINE
+          - unicode LINE SEPARATOR
+          - unicode PARAGRAPH SEPARATOR
+          - EOF
+        */
+      } while (c !== '\n' && c !== '\r' && c !== '\u0085' && c !== '\u2028' && c !== '\u2029' && c !== '')
     } else if (c === '"') {
       // STRING
       matchString(read, a)
     } else if (c === '\\') {
       // ESCAPED SYMBOL
       matchNumberOrSym(read, a, true)
-    } else if (c === '\'') {
+    } else if (c === '\'' || c === '`') {
       // QUOTE SUGAR
+
+      const quoteType: QuoteToken['value']
+        = c === '\'' ? 'quote'
+        : c === '`' ? 'quasiquote'
+        : c
+
       ret(a, {
         kind: 'quote',
-        value: '\'',
-        origvalue: '\'',
+        value: quoteType,
+        origvalue: c,
         line: a.pos.line,
         column: a.pos.col
       })
+    } else if (c === ',') {
+      accumulate(a)
+      const next = read()
+      if (next === '@') {
+        ret(a, {
+          kind: 'quote'
+        , value: 'unquote-splicing'
+        , origvalue: a.accum.value + next
+        , line: a.accum.line
+        , column: a.accum.col
+        })
+      } else {
+        ret(a, {
+          kind: 'quote'
+        , value: 'unquote'
+        , origvalue: a.accum.value
+        , line: a.accum.line
+        , column: a.accum.col
+        })
+        retract(a)
+      }
     } else if (c !== '') {
       // NUMBER, SYMBOL
       // try to match number or symbol
@@ -214,14 +252,19 @@ export const isNumber = (buffer: string): boolean => {
   // return true
 }
 
-const isSeparationChar = (
+const isDelimiterChar = (
   char: string,
-): char is '(' | ')' | '\n' | '\t' | ' ' | '"' | '' =>
-  char === '(' ||
-  char === ')' ||
-  whitespace.test(char) ||
-  char === '' ||
-  char === '"'
+): char is '(' | ')' | '\n' | '\t' | ' ' | '"' | ',' | '\'' | '`' | ';' | '' =>
+     char === '('
+  || char === ')'
+  || whitespace.test(char)
+  || char === ''
+  || char === '"'
+  || char === ','
+  || char === '\''
+  || char === '`'
+  || char === ';'
+
 
 export const EscapeTable: { [str: string]: string | undefined } = {
   n: '\n',
@@ -260,7 +303,7 @@ export const matchNumberOrSym = (
           `Unterminated escape sequence at ${a.pos.line}:${a.pos.col - 1}`,
         )
       accumulate(a, unescape(chr))
-    } else if (isSeparationChar(chr)) {
+    } else if (isDelimiterChar(chr)) {
       retract(a)
       break
     }

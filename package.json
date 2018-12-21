@@ -19,7 +19,7 @@
     "typescript": "^3.2.2"
   },
   "dependencies": {
-    "immer": "^1.8.0",
+    "immer": "^1.9.3",
     "mem": "^4.0.0"
   },
   "jest": {

@@ -6,9 +6,9 @@ import {
   Token, QuoteToken, lexer
 } from './lexer'
 import { or } from './match/functional'
-import { quoteSym, nil, quasiquoteSym, unquoteSym, unquoteSpliceSym } from './symboltable/common-symbols'
+import { quoteSym, quasiquoteSym, unquoteSym, unquoteSpliceSym } from './symboltable/common-symbols'
 import { arrayReadFun, Reader, Refinement, symExpr, compose } from './util'
-import { SExpression, Cons } from './SExpression'
+import { SExpression, Cons, empty } from './SExpression'
 
 const isParen = (tok: Token): tok is ParenToken => tok.kind === 'paren'
 
@@ -72,7 +72,7 @@ export const parser = (toks: Token[]) => {
     if (lookahead && isCloseparen(lookahead)) {
       // the empty list or nil
       match(isCloseparen)
-      return nil
+      return empty
     }
     const first = sexp()
     return list(first)

@@ -1,7 +1,7 @@
 import { symDesc } from './util'
 import { isCons, listToIterable } from './Cons'
-import { quoteSym, nil, isNil, quasiquoteSym, unquoteSpliceSym, unquoteSym } from './symboltable/common-symbols'
-import { SExpression, isLambdaFn, isBoostrapFn, isMacro } from './SExpression'
+import { quoteSym, quasiquoteSym, unquoteSpliceSym, unquoteSym } from './symboltable/common-symbols'
+import { SExpression, isLambdaFn, isBoostrapFn, isMacro, empty, isEmptyList } from './SExpression'
 
 export const printExpression = (val: SExpression, expand = false): string => {
   if (typeof val === 'string') return `"${val}"`
@@ -18,7 +18,7 @@ export const printExpression = (val: SExpression, expand = false): string => {
     let str = '('
     const consArr = [...listToIterable(val)]
     // special case for proper quotes
-    if (consArr.length === 3 && consArr[2] === nil && !expand) {
+    if (consArr.length === 3 && consArr[2] === empty && !expand) {
       const quote = consArr[0]
       const quoteType
         = quote === quoteSym ? '\''
@@ -33,7 +33,7 @@ export const printExpression = (val: SExpression, expand = false): string => {
     }
     for (let i = 0; i < consArr.length; ++i) {
       const car = consArr[i]
-      if (i === consArr.length - 1 && !isNil(car)) {
+      if (i === consArr.length - 1 && !isEmptyList(car)) {
         // TODO: find a way to remove recursion here
         str += ` . ${printExpression(car, expand)}`
       } else if (i === consArr.length - 1) {
@@ -47,5 +47,7 @@ export const printExpression = (val: SExpression, expand = false): string => {
   }
   if (isLambdaFn(val) || isBoostrapFn(val))
     return `<${isMacro(val) ? 'macro' : 'procedure'}${val.name ? ':' + val.name : ''}>`
+  if (isEmptyList(val))
+    return '()'
   return val
 }

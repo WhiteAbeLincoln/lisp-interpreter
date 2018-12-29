@@ -2,10 +2,14 @@ import { SymbolTable } from './symboltable/symboltable'
 import { andT, or } from './match/functional'
 import { Overwrite, MakeKeysOptional } from './match/types'
 
-export type SExpression =  string | number | symbol | Cons | LambdaFn | BootstrapFn
+export type EmptyList = { readonly kind: 'empty' }
+export type SExpression =  string | number | symbol | Cons | EmptyList | LambdaFn | BootstrapFn
+
+export const isEmptyList = (v: SExpression): v is EmptyList => typeof v === 'object' && v.kind === 'empty'
+export const empty: EmptyList = { kind: 'empty' }
 
 export type Cons = {
-  kind: 'cons'
+  readonly kind: 'cons'
   car: SExpression
   cdr: SExpression
 }
@@ -13,7 +17,7 @@ export type Cons = {
 export type LambdaParam = { sym: symbol, variadic?: true }
 
 export type LambdaFn = {
-  kind: 'lambda'
+  readonly kind: 'lambda'
   name?: string
   numParams: [number, number]
   curried: false | Array<SExpression>
@@ -26,7 +30,7 @@ export type LambdaFn = {
 export type MacroFn = Overwrite<LambdaFn, { macro: true }>
 
 export type BootstrapFn = {
-  kind: 'boostrap'
+  readonly kind: 'boostrap'
   name: string
   numParams: [number, number]
   curried: false | Array<SExpression>

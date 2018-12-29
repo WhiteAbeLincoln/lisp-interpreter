@@ -1,12 +1,12 @@
 import { symExpr } from '../util'
 import { SExpression } from '../SExpression'
 
-export const nil = symExpr('nil')
 export const t = symExpr('t')
-export type Nil = typeof nil
+export const f = symExpr('f')
 export type T = typeof t
-export const isNil = (e: SExpression): e is Nil => e === nil
+export type F = typeof f
 export const isT = (e: SExpression): e is T => e === t
+export const isF = (e: SExpression): e is F => e === f
 
 export const condSym = symExpr('cond')
 export const quoteSym = symExpr('quote')

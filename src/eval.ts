@@ -9,18 +9,19 @@ import {
 } from './Cons'
 import { printExpression } from './print'
 import {
-  quoteSym, nil, condSym,
+  quoteSym, condSym,
   defineSym, lambdaSym, quasiquoteSym,
-  unquoteSym, unquoteSpliceSym, macroSym
+  unquoteSym, unquoteSpliceSym, macroSym,
+  f as False
 } from './symboltable/common-symbols'
 import {
   SExpression, Cons, LambdaParam, isLambdaFn,
   lambda, isMacro, MacroFn, isProcedure,
-  LambdaFn, BootstrapFn, arity
+  LambdaFn, BootstrapFn, arity, empty, isEmptyList
 } from './SExpression'
 
 const argumentlist = (arglist: SExpression): LambdaParam[] => {
-  if (arglist === nil) return []
+  if (arglist === empty) return []
   if (typeof arglist === 'symbol') return [{ sym: arglist, variadic: true }]
   if (!isCons(arglist)) throw new TypeError(`${printExpression(arglist)} is not an argument list`)
   const arr: Array<{ sym: symbol, variadic?: true }> = []
@@ -28,18 +29,22 @@ const argumentlist = (arglist: SExpression): LambdaParam[] => {
   for (let i = 0; i < list.length; ++i) {
     const v = list[i]
 
-    if (typeof v !== 'symbol')
+    if (typeof v !== 'symbol' && !isEmptyList(v))
       throw new TypeError(`${printExpression(v)} is not a symbol and so cannot be in an argument list`)
+
     if (arr.find(x => x.sym === v))
       throw new SyntaxError(`Duplicate argument name ${printExpression(v)}`)
 
     if (i === list.length - 1) {
-      if (v !== nil) {
+      if (!isEmptyList(v)) {
         arr.push({ sym: v, variadic: true as true })
       } else {
         continue
       }
     } else {
+      if (typeof v !== 'symbol')
+        throw new TypeError(`${printExpression(v)} is not a symbol and so cannot be in an argument list`)
+
       arr.push({ sym: v })
     }
   }
@@ -211,19 +216,19 @@ export const evalFn = (env: SymbolTable, expr: SExpression): SExpression => {
           case condSym: {
             const { cdr: arglist } = expr
             if (!isCons(arglist))
-              return nil
+              throw new Error('cond: bad syntax')
             for (const pair of listToIterable(arglist, false)) {
               if (!isCons(pair))
                 throw new TypeError(`clause ${printExpression(pair)} should be a list`)
               const predicate = car(pair)
               const result = cdr(pair)
               const predEvaled = evalFn(env, predicate)
-              if (predEvaled === nil) continue
+              if (predEvaled === False) continue
               if (!isCons(result)) return predEvaled
               expr = car(result)
               continue loop
             }
-            return nil
+            throw new Error('cond: no conditions passed')
           }
           case defineSym: {
             const { car: name, cdr: { car: valueUneval } } = validate(expr, 2)

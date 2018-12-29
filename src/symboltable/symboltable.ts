@@ -4,8 +4,8 @@ import {
   car, cdr, fromArray, append, map as mapCons
 } from '../Cons'
 import { printExpression } from '../print'
-import { Nil, nil, t } from './common-symbols'
-import { SExpression, Cons, BootstrapFn, isLambdaFn, isBoostrapFn, LambdaFn, isProcedure, isMacro, arity } from '../SExpression'
+import { t, f } from './common-symbols'
+import { SExpression, Cons, BootstrapFn, isLambdaFn, isBoostrapFn, LambdaFn, isProcedure, isMacro, arity, EmptyList } from '../SExpression'
 import { evalFn, macroExpand, applyFn, applyFn1 } from '../eval'
 import { symExpr, add, div, sub, mult, gt, lt, lte, gte, eq, tuple, isInterned } from '../util'
 import { reduce as reduceI } from '../iterable'
@@ -77,7 +77,7 @@ type CPair5<
   T5 extends SExpression = SExpression,
 > = ConsG<T1, CPair4<T2, T3, T4, T5>>
 
-type CTuple1<T extends SExpression = SExpression> = ConsG<T, Nil>
+type CTuple1<T extends SExpression = SExpression> = ConsG<T, EmptyList>
 type CTuple2<
   T1 extends SExpression = SExpression,
   T2 extends SExpression = SExpression,
@@ -167,7 +167,7 @@ const compare = (op: Fn<[number, number], boolean>) =>
         throw new TypeError(`${printExpression(second)} is not a number`)
 
       if (op(first, second)) continue
-      else return nil
+      else return f
     }
     return t
   }
@@ -262,12 +262,12 @@ function createBoostrapEntry<T extends string>(
 const createPred = <T extends string>(name: T | symbol, pred: Predicate<SExpression>) =>
   createBoostrapEntry(name, 1, args => {
     const { car } = args as Cons
-    return pred(car) ? t : nil
+    return pred(car) ? t : f
   })
 
 const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
   createSExprEntry(t, t),
-  createSExprEntry(nil, nil),
+  createSExprEntry(f, f),
   createSExprEntry('Infinity', Infinity),
   createBoostrapEntry('eval', 1, args => {
     const { car: arg } = args as Cons
@@ -316,7 +316,7 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
   createBoostrapEntry('eq?', 2, args => {
     // Object reference equality
     const { car: o1, cdr: { car: o2 } } = args
-    return o1 === o2 ? t : nil
+    return o1 === o2 ? t : f
   }, true),
   createPred('pair?', isCons),
   createPred('list?', isProperList),
@@ -345,14 +345,14 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
   }),
   createBoostrapEntry('number->string', [1, 2], args => {
     const { car: num, cdr } = args
-    if (cdr !== nil && !isList(cdr))
+    if (cdr !== f && !isList(cdr))
       throw new TypeError(`number->string: Expected the options to be a hash-map`)
 
     if (typeof num !== 'number')
       throw new TypeError(`number->string: Expected number, but recieved ${printExpression(num)}`)
 
     // TODO: replace with a proper hash-map implementation
-    const optionsIter = cdr === nil ? [] : listToIterable(car(cdr as Cons), false)
+    const optionsIter = cdr === f ? [] : listToIterable(car(cdr as Cons), false)
     console.log(cdr)
     type Options = { mode: 'radix' | 'fixed' | 'prec' | 'exp', param: number }
     const symbols = tuple(symExpr('radix'), symExpr('fixed'), symExpr('prec'), symExpr('exp'))
@@ -461,7 +461,7 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
     const { car: fn } = args
     if (!isProcedure(fn))
       throw new Error('procedure-name: expected function')
-    return fn.name || nil
+    return fn.name || ''
   }),
   createBoostrapEntry('rename-procedure', 2, args => {
     const { car: name, cdr: { car: fn } } = args
@@ -525,7 +525,7 @@ rep(`
 
   (defmacro if (pred true false)
       \`(cond (,pred ,true) (t ,false)))
-  (defun not (bool) (if (eq? bool nil) t nil))
+  (defun not (bool) (if (eq? bool f) t f))
 
   (defmacro let (bindings body)
     \`((lambda ,(map car bindings) ,body)
@@ -537,12 +537,15 @@ rep(`
 
   (defun last (xs)
     (if (list? xs)
-      (reduce (C K) nil xs)
+      (if (empty? xs)
+        (throw err)
+        ; (flip const) :: (a b) -> b
+        (reduce (flip const) '() xs))
       (throw err)))
 
   (define begin last)
 
-  (defun empty? (xs) (eq? xs nil))
+  (defun empty? (xs) (eq? xs '()))
 
   (defunC nth (n xs)
     (cond ; or
@@ -564,7 +567,7 @@ rep(`
   ;     (let
   ;       ((len (lambda (xs n)
   ;           (if
-  ;             (eq? xs nil)
+  ;             (eq? xs '())
   ;             n
   ;             (len (cdr xs) (+ n 1))))))
   ;       (len xs 0))

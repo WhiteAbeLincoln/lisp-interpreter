@@ -3,8 +3,7 @@ import produce from 'immer'
 import { or, and, flip } from './match/functional'
 import { Refinement } from './match/types'
 import { printExpression } from './print'
-import { Nil, isNil, nil } from './symboltable/common-symbols'
-import { SExpression, Cons } from './SExpression'
+import { SExpression, Cons, EmptyList, isEmptyList, empty } from './SExpression'
 
 export interface ConsG<Car extends SExpression = SExpression, Cdr extends SExpression = SExpression> extends Cons {
   kind: 'cons'
@@ -12,25 +11,25 @@ export interface ConsG<Car extends SExpression = SExpression, Cdr extends SExpre
   cdr: Cdr
 }
 
-export type List = Nil | Cons
+export type List = EmptyList | Cons
 
 export const isCons = (c: SExpression): c is Cons =>
   typeof c === 'object' && c.kind === 'cons'
 
-export const isList = or(isNil, isCons)
+export const isList: Refinement<SExpression, List> = or(isEmptyList, isCons)
 
 /**
  * Predicate that determines if the SExpression is a cons chain terminated with '()
  * @param c
  */
-export const isProperList = and(isList, (c: List) => isNil(last(listToIterable(c))))
+export const isProperList = and(isList, (c: List) => isEmptyList(last(listToIterable(c))))
 
 export const cons = (car: SExpression, cdr: SExpression): Cons => ({
   car,
   cdr,
   kind: 'cons',
 })
-export const consProper = (car: SExpression): Cons => cons(car, nil)
+export const consProper = (car: SExpression): Cons => cons(car, empty)
 
 /**
  * Iterates over the values of a cons list
@@ -40,8 +39,10 @@ export const consProper = (car: SExpression): Cons => cons(car, nil)
  *
  * Does not follow tree-like cons structures
  *
+ * ```ts
  * given (1 . (2 . (3 . nil)))
  * 1 2 3 nil
+ * ```
  *
  * @param c a cons
  */
@@ -60,7 +61,8 @@ export function* listToIterable(c: SExpression, yieldLast: boolean = true) {
  * given (1 . (2 . (3 . nil)))
  * (1 . (2 . (3 . nil)))
  * (2 . (3 . nil))
- * (3 . nil)```
+ * (3 . nil)
+ * ```
  *
  * @param c a cons
  */
@@ -75,14 +77,16 @@ export function* iterateCons(c: Cons) {
 export function cdr<A extends ConsG<any, any>>(v: A): A extends ConsG<any, infer C> ? C : never
 export function cdr(v: List): SExpression
 export function cdr(v: List): SExpression {
-  if (isNil(v)) return v
+  if (isEmptyList(v))
+    throw new Error(`cdr: ${printExpression(v)} has no cdr`)
   if (isCons(v)) return v.cdr
   throw new TypeError(`${printExpression(v)} is not a list`)
 }
 export function car<A extends ConsG<any, any>>(v: A): A extends ConsG<infer C, any> ? C : never
 export function car(v: List): SExpression
 export function car(v: List): SExpression {
-  if (isNil(v)) return v
+  if (isEmptyList(v))
+    throw new Error(`car: ${printExpression(v)} has no car`)
   if (isCons(v)) return v.car
   throw new TypeError(`${printExpression(v)} is not a list`)
 }
@@ -96,7 +100,7 @@ export function car(v: List): SExpression {
  * the remaining arguments must be proper lists
  */
 export const append = (lists: Iterable<SExpression>) =>
-  reduceRightEager(lists as Iterable<List>, flip(appendTwo), nil as SExpression)
+  reduceRightEager(lists as Iterable<List>, flip(appendTwo), empty as SExpression)
   /*
     we reduce over the right because that should shorten
     the length of the linked list that we have to traverse
@@ -127,8 +131,8 @@ export const append = (lists: Iterable<SExpression>) =>
   */
 
 export const appendTwo = (list1: List, list2: SExpression) => {
-  if (isNil(list1)) return list2
-  if (isNil(list2)) return list1
+  if (isEmptyList(list1)) return list2
+  if (isEmptyList(list2)) return list1
   // check if list1 is a list
   if (!isList(list1))
     throw new TypeError(`append: ${printExpression(list1)} is not a list`)
@@ -139,7 +143,7 @@ export const appendTwo = (list1: List, list2: SExpression) => {
   // also, immer assumes our input to be a tree
   return produce(list1, draft => {
     const lastCons = last(iterateCons(draft))
-    if (!isNil(lastCons.cdr))
+    if (!isEmptyList(lastCons.cdr))
       throw new TypeError(`append: A proper list must not end with ${printExpression(lastCons.cdr)}`)
     lastCons.cdr = list2
   })
@@ -157,18 +161,18 @@ export function fromArray(
 export function fromArray(
   arr: [],
   options?: FromArrayOptions
-): Nil
+): EmptyList
 export function fromArray(
   arr: SExpression[],
   options?: FromArrayOptions
-): Cons | Nil
+): Cons | EmptyList
 export function fromArray(
   arr: SExpression[],
   options: FromArrayOptions = { notProper: false, nonEmpty: false }
-): Cons | Nil {
+): Cons | EmptyList {
   const { notProper, nonEmpty } = options
   if (arr.length === 0 && !nonEmpty)
-    return nil
+    return empty
   else if (nonEmpty)
     throw new Error('Array must be non empty')
   const [first, ...rest] = arr
@@ -254,7 +258,7 @@ export const foldl = (fn: (p: SExpression, c: SExpression) => SExpression, init?
 
 export const foldr = (fn: (p: SExpression, c: SExpression) => SExpression, init: SExpression) =>
   (list: List): SExpression => {
-    if (isNil(list)) return init
+    if (isEmptyList(list)) return init
     // let { acc, expr } = typeof init !== 'undefined'
     //   ? { acc: init, expr: list as SExpression }
     //   : { acc: car(list), expr: cdr(list) }

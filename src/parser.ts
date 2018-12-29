@@ -7,7 +7,7 @@ import {
 } from './lexer'
 import { or } from './match/functional'
 import { quoteSym, nil, quasiquoteSym, unquoteSym, unquoteSpliceSym } from './symboltable/common-symbols'
-import { arrayReadFun, Reader, Refinement, symExpr } from './util'
+import { arrayReadFun, Reader, Refinement, symExpr, compose } from './util'
 import { SExpression, Cons } from './SExpression'
 
 const isParen = (tok: Token): tok is ParenToken => tok.kind === 'paren'
@@ -148,3 +148,5 @@ export const parser = (toks: Token[]) => {
 
   return data
 }
+
+export const readString = compose(parser, lexer)

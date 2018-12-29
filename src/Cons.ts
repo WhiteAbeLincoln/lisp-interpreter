@@ -20,7 +20,7 @@ export const isCons = (c: SExpression): c is Cons =>
 export const isList = or(isNil, isCons)
 
 /**
- *
+ * Predicate that determines if the SExpression is a cons chain terminated with '()
  * @param c
  */
 export const isProperList = and(isList, (c: List) => isNil(last(listToIterable(c))))
@@ -210,13 +210,13 @@ export const map = (fn: (s: SExpression) => SExpression) => (list: List) => {
   return fromArray(arr)
 }
 
-export const reduce = <A extends SExpression>(fn: (p: A, c: A) => A, init: A, typeValidator: Refinement<SExpression, A>) =>
+export const reduce = <A extends SExpression>(fn: (p: A, c: A) => A, init: A, typeValidator?: Refinement<SExpression, A>) =>
   (list: SExpression) => {
     let acc = init
     for (const val of listToIterable(list, false)) {
-      if (!typeValidator(val))
-        throw new TypeError(`${printExpression(val)} is not the correct type`)
-      acc = fn(acc, val)
+      if (typeValidator && !typeValidator(val))
+        throw new TypeError(`reduce: ${printExpression(val)} is not the correct type`)
+      acc = fn(acc, val as A)
     }
 
     return acc
@@ -229,9 +229,9 @@ export const reduce1 = <A extends SExpression>(fn: (p: A, c: A) => A, typeValida
 
     for (const val of listToIterable(rest, false)) {
       if (!typeValidator(acc))
-        throw new TypeError(`${printExpression(acc)} is not the correct type`)
+        throw new TypeError(`reduce1: ${printExpression(acc)} is not the correct type`)
       if (!typeValidator(val))
-        throw new TypeError(`${printExpression(val)} is not the correct type`)
+        throw new TypeError(`reduce1: ${printExpression(val)} is not the correct type`)
       acc = fn(acc, val)
     }
 

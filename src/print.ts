@@ -1,7 +1,7 @@
 import { symDesc } from './util'
 import { isCons, listToIterable } from './Cons'
 import { quoteSym, nil, isNil, quasiquoteSym, unquoteSpliceSym, unquoteSym } from './symboltable/common-symbols'
-import { SExpression, isLambdaFn, isBoostrapFn } from './SExpression'
+import { SExpression, isLambdaFn, isBoostrapFn, isMacro } from './SExpression'
 
 export const printExpression = (val: SExpression, expand = false): string => {
   if (typeof val === 'string') return `"${val}"`
@@ -45,6 +45,7 @@ export const printExpression = (val: SExpression, expand = false): string => {
     str += ')'
     return str
   }
-  if (isLambdaFn(val) || isBoostrapFn(val)) return `<procedure${val.name ? ':' + val.name : ''}>`
+  if (isLambdaFn(val) || isBoostrapFn(val))
+    return `<${isMacro(val) ? 'macro' : 'procedure'}${val.name ? ':' + val.name : ''}>`
   return val
 }

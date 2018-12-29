@@ -51,6 +51,8 @@ export const constNull = K(null)
  */
 export const constUndefined = K(undefined)
 
+export const flatten = <T>(v: T[][]): T[] => v.reduce((p, c) => [...p, ...c], [])
+
 export function all<A, B extends A>(
   pred: Refinement<A, B>,
 ): Refinement<A[], B[]>

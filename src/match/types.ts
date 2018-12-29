@@ -75,8 +75,9 @@ export type UnionToIntersection<U> = (U extends any
   ? I
   : never
 
-export type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>>
+export type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>
 export type Overwrite<T, U> = Omit<T, keyof T & keyof U> & U
+export type MakeKeysOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 
 /**
  * Add an element to the end of a tuple

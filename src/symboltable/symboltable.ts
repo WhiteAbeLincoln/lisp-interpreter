@@ -1,85 +1,23 @@
 import preludeFile from '!raw-loader!./prelude.tlsp'
-import {
-  isProperList, unsafeLength, ConsG,
-  isCons, reduce as reduceCons, listToIterable,
-  car, cdr, fromArray, append, map as mapCons
-} from '../Cons'
-import * as consContext from '../Cons'
 import { printExpression } from '../print'
-import { t, f, T, F } from './common-symbols'
-import {
-  SExpression, Cons, BootstrapFn, isLambdaFn,
-  isBoostrapFn, LambdaFn, isProcedure, isMacro,
-  arity, EmptyList, sexprTypeOf, isSExpression, empty
-} from '../SExpression'
 import { evalFn, macroExpand, macroExpand1, } from '../eval'
-import { symExpr, add, div, sub, mult, gt, lt, lte, gte, eq, tuple, isInterned, compose } from '../util'
+import { add, div, sub, mult, gt, lt, lte, gte, eq, tuple, compose } from '../util'
 import { reduce as reduceI } from '../iterable'
 import { Predicate } from '../match/types'
 import { readString } from '../parser'
 import { typeOf } from '../match/predicates'
+import {
+  SExpression, ConsG, EmptyList,
+  Cons, LambdaFn, SymbolTable,
+} from '../runtime'
+import * as R from '../runtime'
+import { t, f, T, F } from '../runtime/common-symbols'
 import vm from 'vm'
 
-const boolJsToLisp = (v: boolean) => v ? t : f
-const boolLispToJs = (v: SExpression) => v === f ? false : true
 
-const marshallValue = (evaluated: unknown): SExpression | null => {
-  if (isSExpression(evaluated))
-    return evaluated
-
-  if (typeof evaluated === 'function')
-    return createBoostrap(
-      (fncall, _env, numParams) => {
-        const args = validate(fncall, numParams)
-        const argsArr = listToIterable(args)
-        const result: unknown = evaluated(...argsArr)
-
-        const val = marshallValue(result)
-
-        if (val === null)
-          throw new Error(`function ${evaluated.name} returned invalid value`)
-
-        return val
-      },
-      evaluated.name,
-      evaluated.length,
-      evaluated.length > 1,
-    )
-
-  if (typeof evaluated === 'boolean')
-    return boolJsToLisp(evaluated)
-
-  if (Array.isArray(evaluated)) {
-    const mapped: SExpression[] = []
-
-    for (const x of evaluated as unknown[]) {
-      const m = marshallValue(x)
-      if (m === null)
-        return null
-      mapped.push(m)
-    }
-
-    return fromArray(mapped)
-  }
-
-  return null
-}
-
-
-const vmContext = vm.createContext({
-  tslisp: Object.freeze({
-    ...consContext,
-    bool: {
-      true: t,
-      false: f,
-      toLisp: boolJsToLisp,
-      toJs: boolLispToJs,
-    },
-    marshallValue,
-  })
+export const vmContext = vm.createContext({
+  tslisp: Object.freeze({ ...R, })
 })
-
-export type SymbolTable = { parent: SymbolTable | null, table: Map<symbol, SExpression> }
 
 function* iterateTables(table: SymbolTable) {
   let tablePointer: SymbolTable['parent'] = table
@@ -183,18 +121,18 @@ export function validate(fncall: Cons, arglen: number | [number, number], proper
   const { car: fnNameSym, cdr: args } = fncall
   const [min] = typeof arglen === 'number' ? [arglen, arglen] : arglen
 
-  if (typeof fnNameSym !== 'symbol' && !isLambdaFn(fnNameSym) && !isBoostrapFn(fnNameSym))
+  if (typeof fnNameSym !== 'symbol' && !R.isLambdaFn(fnNameSym) && !R.isBoostrapFn(fnNameSym))
     throw new Error(`Don't know how we got here, but function call name ${fnNameSym} is not a symbol or function`)
   const name = (fnNameSym as symbol).description || (fnNameSym as LambdaFn).name || '[lambda]'
-  if (proper && !isProperList(args))
+  if (proper && !R.isProperList(args))
     throw new TypeError(`argument list given to ${name} is dotted: ${printExpression(fncall)}`)
-  if (!isCons(args)) {
+  if (!R.isCons(args)) {
     if (!Array.isArray(arglen)) return args
     throw new TypeError(`argument list given to ${name} is dotted: ${printExpression(fncall)}`)
   }
 
   // TODO: this can loop infinitely if args has a cycle
-  const len = unsafeLength(args)
+  const len = R.ConsLib.unsafeLength(args)
   if (len < min) {
     throw new TypeError(`too few arguments given to ${name}: ${printExpression(fncall)}`)
   }
@@ -230,25 +168,9 @@ export function validate(fncall: Cons, arglen: number | [number, number], proper
 //     return t
 //   }
 
-const createBoostrap = (
-  body: BootstrapFn['body'],
-  name: string,
-  numParams: [number, number] | number,
-  curry?: boolean,
-): BootstrapFn => ({
-  kind: 'boostrap',
-  name,
-  body,
-  numParams:
-    typeof numParams === 'number'
-      ? [numParams, numParams]
-      :  numParams,
-  curried: curry ? [] : false,
-})
-
 const createSExprEntry =
   <T extends string>(symbol: symbol | T, value: SExpression): [symbol, SExpression] =>
-    [typeof symbol === 'string' ? symExpr(symbol) : symbol, value]
+    [typeof symbol === 'string' ? R.Symbols.symExpr(symbol) : symbol, value]
 
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
@@ -301,7 +223,7 @@ function createBoostrapEntry<T extends string>(
 ): ReturnType<typeof createSExprEntry>
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
-  numParams: Parameters<typeof createBoostrap>[2],
+  numParams: Parameters<typeof R.createBoostrap>[2],
   body: (args: any, env: SymbolTable, numParams: [number, number]) => SExpression,
   curry?: boolean,
   doValidate = true,
@@ -312,7 +234,7 @@ function createBoostrapEntry<T extends string>(
     ? body
     : (fncall: Cons, env: SymbolTable, numParams: [number, number]) =>
       body(validate(fncall, numParams), env, numParams)
-  return createSExprEntry(symbol, createBoostrap(
+  return createSExprEntry(symbol, R.createBoostrap(
     realBody, name, numParams, curry
   ))
 }
@@ -352,7 +274,7 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
     const { car: arg } = args as Cons
     return evalFn(symboltable, arg)
   }),
-  createBoostrapEntry('typeof', 1, ({ car }) => sexprTypeOf(car)),
+  createBoostrapEntry('typeof', 1, ({ car }) => R.Util.sexprTypeOf(car)),
   createBoostrapEntry('native-eval', 1, args => {
     const { car: str } = args
     if (typeof str !== 'string')
@@ -360,7 +282,7 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
 
     const evaluated: unknown = vm.runInContext(str, vmContext)
 
-    const val = marshallValue(evaluated)
+    const val = R.Util.marshallValue(evaluated)
     if (val === null)
       throw Error('native-eval: returned invalid value')
 
@@ -370,11 +292,11 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
   createBinaryOp('sub', sub, typeOf('number')),
   createBinaryOp('mult', mult, typeOf('number')),
   createBinaryOp('div', div, typeOf('number')),
-  createBinaryOp('gt', compose(boolJsToLisp, gt), typeOf('number')),
-  createBinaryOp('lt', compose(boolJsToLisp, lt), typeOf('number')),
-  createBinaryOp('lte', compose(boolJsToLisp, lte), typeOf('number')),
-  createBinaryOp('gte', compose(boolJsToLisp, gte), typeOf('number')),
-  createBinaryOp('num=', compose(boolJsToLisp, eq), typeOf('number')),
+  createBinaryOp('gt', compose(R.Util.boolToLisp, gt), typeOf('number')),
+  createBinaryOp('lt', compose(R.Util.boolToLisp, lt), typeOf('number')),
+  createBinaryOp('lte', compose(R.Util.boolToLisp, lte), typeOf('number')),
+  createBinaryOp('gte', compose(R.Util.boolToLisp, gte), typeOf('number')),
+  createBinaryOp('num=', compose(R.Util.boolToLisp, eq), typeOf('number')),
   createBinaryOp('str-concat', (a: string, b: string) => a + b, typeOf('string')),
   createBoostrapEntry('print', 1, args => {
     const { car: arg } = args
@@ -382,26 +304,26 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
     return arg
   }),
   createBoostrapEntry('str', 1, ({ car }) => printExpression(car)),
-  createBoostrapEntry('car', 1, ({ car: arg }) => car(arg)),
-  createBoostrapEntry('cdr', 1, ({ car: arg }) => cdr(arg)),
+  createBoostrapEntry('car', 1, ({ car: arg }) => R.ConsLib.car(arg)),
+  createBoostrapEntry('cdr', 1, ({ car: arg }) => R.ConsLib.cdr(arg)),
   createBoostrapEntry('list*', [2, Infinity], args => {
-    if (!isCons(args))
+    if (!R.isCons(args))
       throw new TypeError(`list*: Expecting cons, but recieved ${printExpression(args)}`)
-    return fromArray([...listToIterable(args, false)], { notProper: true })
+    return R.ConsLib.fromArray([...R.ConsLib.listToIterable(args, false)], { notProper: true })
   }),
   createBoostrapEntry('append', [0, Infinity], args => {
-    return append(listToIterable(args, false))
+    return R.ConsLib.append(R.ConsLib.listToIterable(args, false))
   }),
   createBoostrapEntry('eq?', 2, equal, true),
-  createPred('list?', isProperList),
+  createPred('list?', R.isProperList),
   createPred('integer?', v => typeof v === 'number' && Number.isInteger(v)),
   createPred('natural?', v => typeof v === 'number' && Number.isInteger(v) && v >= 0),
-  createPred('lambda?', isLambdaFn),
-  createPred('macro?', isMacro),
+  createPred('lambda?', R.isLambdaFn),
+  createPred('macro?', R.isMacro),
   createPred('symbol-interned?', v => {
     if (typeof v !== 'symbol')
       throw new TypeError(`Expected symbol?, given ${printExpression(v)}`)
-    return isInterned(v)
+    return R.isInterned(v)
   }),
   createPred('nan?', v => {
     if (typeof v !== 'number')
@@ -414,7 +336,7 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
     return !Number.isFinite(v)
   }),
   createBoostrapEntry('exit', [0, 1], args => {
-    const { car: num } = isCons(args) ? args : { car: 0 }
+    const { car: num } = R.isCons(args) ? args : { car: 0 }
     if (typeof num !== 'number')
       throw new Error('exit: expected number')
     process.exit(num)
@@ -422,21 +344,21 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
   }),
   createBoostrapEntry('number->string', [1, 2], args => {
     const { car: num, cdr } = args
-    if (cdr !== empty && !isCons(cdr))
+    if (cdr !== R.empty && !R.isCons(cdr))
       throw new TypeError(`number->string: Expected the options to be a hash-map`)
 
     if (typeof num !== 'number')
       throw new TypeError(`number->string: Expected number, but recieved ${printExpression(num)}`)
 
     // TODO: replace with a proper hash-map implementation
-    const optionsIter = cdr === empty ? [] : listToIterable(car(cdr as Cons), false)
+    const optionsIter = cdr === R.empty ? [] : R.ConsLib.listToIterable(R.ConsLib.car(cdr as Cons), false)
     console.log(cdr)
     type Options = { mode: 'radix' | 'fixed' | 'prec' | 'exp', param: number }
-    const symbols = tuple(symExpr('radix'), symExpr('fixed'), symExpr('prec'), symExpr('exp'))
+    const symbols = tuple(R.Symbols.symExpr('radix'), R.Symbols.symExpr('fixed'), R.Symbols.symExpr('prec'), R.Symbols.symExpr('exp'))
 
     const { mode, param } = reduceI(optionsIter, (acc, curr) => {
       console.log('Acc', acc, 'Curr', curr)
-      if (!isCons(curr))
+      if (!R.isCons(curr))
         throw new TypeError(`number->string: Expected the options to be a hash-map`)
       const { car: key, cdr: value } = curr
       if (typeof key !== 'symbol' || !(symbols as symbol[]).includes(key))
@@ -467,7 +389,7 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
     const { car: arg } = args
     if (typeof arg !== 'string')
       throw new TypeError(`${printExpression(arg)} is not a string`)
-    return symExpr(arg)
+    return R.Symbols.symExpr(arg)
   }),
   createBoostrapEntry('string->uninterned-symbol', 1, args => {
     const { car: arg } = args
@@ -480,7 +402,7 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
     if (typeof arg !== 'string')
       throw new TypeError(`Expected string?, given ${printExpression(arg)}`)
     const arr = readString(arg)
-    return arr.length === 1 ? arr[0] : fromArray(arr)
+    return arr.length === 1 ? arr[0] : R.ConsLib.fromArray(arr)
   }),
   createBoostrapEntry('macroexpand', 1, (args, env) => {
     const { car: arg } = args
@@ -492,19 +414,19 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
   }),
   createBoostrapEntry('procedure-arity', 1, args => {
     const { car: fn } = args
-    if (!isProcedure(fn))
+    if (!R.isProcedure(fn))
       throw new Error('procedure-arity: expected function')
-    return fromArray(arity(fn))
+    return R.ConsLib.fromArray(R.Util.arity(fn))
   }),
   createBoostrapEntry('procedure-orig-arity', 1, args => {
     const { car: fn } = args
-    if (!isProcedure(fn))
+    if (!R.isProcedure(fn))
       throw new Error('procedure-orig-arity: expected function')
-    return fromArray(fn.numParams)
+    return R.ConsLib.fromArray(fn.numParams)
   }),
   createBoostrapEntry('procedure-name', 1, args => {
     const { car: fn } = args
-    if (!isProcedure(fn))
+    if (!R.isProcedure(fn))
       throw new Error('procedure-name: expected function')
     return fn.name || ''
   }),
@@ -513,20 +435,20 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
 
     if (typeof name !== 'string')
       throw new Error('rename-procedure: expected string')
-    if (!isProcedure(fn))
+    if (!R.isProcedure(fn))
       throw new Error('rename-procedure: expected function')
 
     return { ...fn, name }
   }, true),
   createBoostrapEntry('curry', 1, args => {
     const { car: fn } = args
-    if (!isProcedure(fn))
+    if (!R.isProcedure(fn))
       throw new Error('curry: expected function')
     return { ...fn, curried: fn.curried || [] }
   }),
   createBoostrapEntry('gensym', [0, 1], args => {
     let prefix = 'g'
-    if (isCons(args)) {
+    if (R.isCons(args)) {
       const { car } = args
       if (typeof car !== 'string')
         throw new Error('gensym: expected string prefix')

@@ -2,8 +2,6 @@ import { Fn } from './match/functional'
 
 export type Predicate<T> = (a: T) => boolean;
 export type Refinement<A, B extends A> = (a: A) => a is B;
-export const symDesc = (a: symbol) => (a as typeof a & { description?: string }).description
-
 export const truthy = <T>(
   v: T
 ): v is Exclude<T, null | undefined | false | 0 | ""> => !!v;
@@ -229,14 +227,3 @@ export const add = (x: number, y: number) => x + y
 export const sub = (x: number, y: number) => x - y
 export const mult = (x: number, y: number) => x * y
 export const div = (x: number, y: number) => x / y
-
-export const isInterned = (s: symbol) => Symbol.keyFor(s) === s.description
-
-export type InternedSymbol<T extends string> = symbol & { description: T }
-// we shouldn't have a problem using the global symbol registry,
-// since these symbols are not ever used by native js code - no chance of conflicts/misuse
-export const symExpr =
-  <T extends string>(value: T): InternedSymbol<T> => {
-    const v = Symbol.for(value)
-    return v as any
-  }

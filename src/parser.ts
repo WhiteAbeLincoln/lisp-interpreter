@@ -1,4 +1,4 @@
-import { cons, consProper, setCdr } from './Cons'
+import { setCdr } from './runtime/Cons'
 import {
   CloseParen, isDotDelim, isNum, isQuote,
   isString, isSymbol, NumToken, OpenParen,
@@ -6,9 +6,9 @@ import {
   Token, QuoteToken, lexer
 } from './lexer'
 import { or } from './match/functional'
-import { quoteSym, quasiquoteSym, unquoteSym, unquoteSpliceSym } from './symboltable/common-symbols'
-import { arrayReadFun, Reader, Refinement, symExpr, compose } from './util'
-import { SExpression, Cons, empty } from './SExpression'
+import { quoteSym, quasiquoteSym, unquoteSym, unquoteSpliceSym, symExpr } from './runtime/common-symbols'
+import { arrayReadFun, Reader, Refinement, compose } from './util'
+import { SExpression, Cons, empty, cons, consProper } from './runtime/SExpression'
 
 const isParen = (tok: Token): tok is ParenToken => tok.kind === 'paren'
 

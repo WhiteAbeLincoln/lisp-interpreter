@@ -1,42 +1,11 @@
-import { last, reduceRightEager, reduce as reduceI, listParts } from './iterable'
+import { last, reduceRightEager, reduce as reduceI, listParts } from '../iterable'
 import produce from 'immer'
-import { flip } from './match/functional'
-import { Overwrite, Predicate, Mutable } from './match/types'
-import { printExpression } from './print'
-import { SExpression, Cons, EmptyList, isEmptyList, empty, isSExpression } from './SExpression'
+import { flip } from '../match/functional'
+import { Predicate, Mutable } from '../match/types'
+import { printExpression } from '../print'
+import { SExpression, Cons, EmptyList, isEmptyList, empty, isSExpression, isCons, cons, ConsG, List, isProperList, consProper } from './SExpression'
 
 // All functions here should potentially handle invalid values because they will be used from external, user-provided js code
-
-export interface ConsG<Car extends SExpression = SExpression, Cdr extends SExpression = SExpression> extends Cons {
-  kind: 'cons'
-  car: Car
-  cdr: Cdr
-}
-
-type ProperPair = Overwrite<Cons, { proper: true }>
-
-export type List = EmptyList | ProperPair
-
-export const isCons = (c: unknown): c is Cons =>
-  typeof c === 'object' && c !== null && (c as any).kind === 'cons'
-
-/**
- * Predicate that determines if the SExpression is a cons chain terminated with '()
- * @param c
- */
-export const isProperList = (v: unknown): v is List =>
-  v === empty || (isCons(v) && v.proper)
-
-export const cons = (car: unknown, cdr: unknown): Cons => {
-  if (!isSExpression(car) || !isSExpression(cdr))
-    throw new Error('cons: expected a valid value')
-  return {
-    car,
-    cdr,
-    proper: isCons(cdr) ? cdr.proper : cdr === empty,
-    kind: 'cons',
-  }
-}
 
 export const setCar = (pair: unknown, value: unknown) => {
   if (!isSExpression(pair) || !isSExpression(value) || !isCons(pair))
@@ -48,16 +17,17 @@ export const setCar = (pair: unknown, value: unknown) => {
 }
 
 export const setCdr = (pair: unknown, value: unknown) => {
-  if (!isSExpression(pair) || !isSExpression(value) || !isCons(pair))
-    throw new Error('setCdr: expecting a valid value')
+  if (!isSExpression(pair) || !isSExpression(value))
+    throw new Error(`setCdr: expecting a valid value, got | pair: ${JSON.stringify(pair)}, value: ${JSON.stringify(value)} |`)
+
+  if (!isCons(pair))
+    throw new Error(`setCdr: expecting a pair, got ${printExpression(pair)}`)
 
   ;(pair as Mutable<typeof pair>).cdr = value
   ;(pair as Mutable<typeof pair>).proper = isCons(value) && value.proper
 
   return pair
 }
-
-export const consProper = (car: SExpression): Cons => cons(car, empty)
 
 export function cdr<A extends ConsG<any, any>>(v: A): A extends ConsG<any, infer C> ? C : never
 export function cdr(v: unknown): SExpression

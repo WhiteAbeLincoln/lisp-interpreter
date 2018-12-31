@@ -1,24 +1,24 @@
 import {
-  SymbolTable, getSymbol,
-  validate, setValue, pushTable,
+  getSymbol, validate, setValue, pushTable,
 } from './symboltable/symboltable'
 import {
-  isCons, car, listToIterable,
+  car, listToIterable,
   cdr, map, fromArray,
-  cons, append, ConsG, unsafeLength
-} from './Cons'
+  append, unsafeLength
+} from './runtime/Cons'
 import { printExpression } from './print'
 import {
   quoteSym, condSym,
   defineSym, lambdaSym, quasiquoteSym,
   unquoteSym, unquoteSpliceSym, macroSym,
   f as False
-} from './symboltable/common-symbols'
+} from './runtime/common-symbols'
 import {
   SExpression, Cons, LambdaParam, isLambdaFn,
   lambda, isMacro, MacroFn, isProcedure,
-  LambdaFn, BootstrapFn, arity, empty, isEmptyList
-} from './SExpression'
+  LambdaFn, BootstrapFn, empty, isEmptyList, isCons, SymbolTable, cons, ConsG
+} from './runtime/SExpression'
+import { arity } from './runtime/utility'
 
 const argumentlist = (arglist: SExpression): LambdaParam[] => {
   if (arglist === empty) return []

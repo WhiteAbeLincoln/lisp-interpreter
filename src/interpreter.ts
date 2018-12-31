@@ -2,10 +2,10 @@ import {
   Token,
   lexer,
 } from './lexer'
-import { symboltable, SymbolTable } from './symboltable/symboltable'
+import { symboltable,} from './symboltable/symboltable'
 import { parser } from './parser'
 import { evalFn } from './eval'
-import { SExpression } from './SExpression'
+import { SExpression, SymbolTable } from './runtime/SExpression'
 
 /* Execute With:
 
@@ -21,7 +21,7 @@ const execute = (program: SExpression[], context: SymbolTable = symboltable) => 
   return program.map(v => evalFn(context, v))
 }
 
-export function interpreter(input: string, context?: SymbolTable, level?: 'eval'): any
+export function interpreter(input: string, context?: SymbolTable, level?: 'eval'): unknown
 export function interpreter(input: string, context?: SymbolTable, level?: 'tokens'): Token[]
 export function interpreter(input: string, context?: SymbolTable, level?: 'ast'): SExpression[]
 export function interpreter(input: string, context?: SymbolTable, level?: 'ast' | 'tokens' | 'eval'): Token[] | SExpression[]

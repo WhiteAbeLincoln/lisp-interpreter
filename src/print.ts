@@ -1,7 +1,7 @@
-import { symDesc } from './util'
-import { isCons, listToIterable, fromArray } from './Cons'
-import { quoteSym, quasiquoteSym, unquoteSpliceSym, unquoteSym } from './symboltable/common-symbols'
-import { SExpression, isLambdaFn, isBoostrapFn, isMacro, empty, isEmptyList } from './SExpression'
+import { listToIterable, fromArray } from './runtime/Cons'
+import { quoteSym, quasiquoteSym, unquoteSpliceSym, unquoteSym } from './runtime/common-symbols'
+import { SExpression, isLambdaFn, isBoostrapFn, isMacro, empty, isEmptyList, isCons } from './runtime/SExpression'
+import { symDesc } from './runtime/utility'
 
 export const printExpression = (val: SExpression, expand = false): string => {
   if (typeof val === 'string') return `"${val}"`

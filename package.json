@@ -1,22 +1,29 @@
 {
   "scripts": {
     "start": "node build/index.js",
-    "build": "tsc -p ./tsconfig.json",
+    "build": "webpack",
+    "build:watch": "webpack --watch",
     "build-run": "npm run build && npm start",
-    "build-repl": "npm run build && npm start -- -r",
+    "repl-loop": "npm start -- -r && clear && npm run repl-loop",
     "repl": "npm start -- -r",
     "check-circular": "madge --circular --extensions ts src"
   },
+  "sideEffects": false,
   "devDependencies": {
     "@types/jest": "^23.3.9",
     "@types/mem": "^1.1.2",
     "@types/node": "^10.12.9",
     "fast-check": "^1.7.1",
+    "file-loader": "^3.0.1",
     "jest": "^23.6.0",
     "madge": "^3.3.0",
+    "raw-loader": "^1.0.0",
     "ts-jest": "^23.10.4",
+    "ts-loader": "^5.3.2",
     "ts-node": "^7.0.1",
-    "typescript": "^3.2.2"
+    "typescript": "^3.2.2",
+    "webpack": "^4.28.3",
+    "webpack-cli": "^3.1.2"
   },
   "dependencies": {
     "immer": "^1.9.3",

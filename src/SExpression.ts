@@ -1,6 +1,8 @@
 import { SymbolTable } from './symboltable/symboltable'
 import { andT, or } from './match/functional'
 import { Overwrite, MakeKeysOptional } from './match/types'
+import { typeOf } from './match/predicates'
+import { isCons } from './Cons'
 
 export type EmptyList = { readonly kind: 'empty' }
 export type SExpression =  string | number | symbol | Cons | EmptyList | LambdaFn | BootstrapFn
@@ -10,8 +12,9 @@ export const empty: EmptyList = { kind: 'empty' }
 
 export type Cons = {
   readonly kind: 'cons'
-  car: SExpression
-  cdr: SExpression
+  readonly proper: boolean
+  readonly car: SExpression
+  readonly cdr: SExpression
 }
 
 export type LambdaParam = { sym: symbol, variadic?: true }
@@ -37,6 +40,15 @@ export type BootstrapFn = {
   body: (fncall: Cons, env: SymbolTable, numParams: [number, number]) => SExpression
 }
 
+export const isPrimitive = (v: SExpression): v is Exclude<SExpression, Cons> =>
+  typeOf('string', 'number', 'symbol')(v) || v.kind !== 'cons'
+
+export const isSExpression = (v: unknown): v is SExpression =>
+  typeOf('string', 'number', 'symbol')(v) ||
+  v === empty ||
+  (typeof v === 'object' && v !== null && ['lambda', 'boostrap', 'cons'].includes((v as any).kind))
+  || false
+
 export const isLambdaFn = (v: SExpression): v is LambdaFn =>
   typeof v === 'object' && v.kind === 'lambda'
 
@@ -46,6 +58,21 @@ export const isBoostrapFn = (v: SExpression): v is BootstrapFn =>
 export const isProcedure = or(isLambdaFn, isBoostrapFn)
 
 export const isMacro = andT(isLambdaFn, (l): l is MacroFn => l.macro)
+
+export type SExprTypeName =
+  | 'pair'
+  | 'unit'
+  | 'procedure'
+  | 'string'
+  | 'number'
+  | 'symbol'
+
+export const sexprTypeOf = (arg: SExpression): SExprTypeName =>
+    isCons(arg)       ? 'pair'
+  : isEmptyList(arg)  ? 'unit'
+  : isProcedure(arg)  ? 'procedure'
+  : typeOf('string', 'number', 'symbol')(arg) ? typeof arg as 'string' | 'number' | 'symbol'
+  : arg
 
 export const lambda = (
   lambdaDef: MakeKeysOptional<
@@ -62,5 +89,5 @@ export const lambda = (
 
 export const arity = (fn: BootstrapFn | LambdaFn): [number, number] => {
   const [, max] = fn.numParams
-  return fn.curried ? [0, max - fn.curried.length] : fn.numParams
+  return fn.curried ? [1, max - fn.curried.length] : fn.numParams
 }

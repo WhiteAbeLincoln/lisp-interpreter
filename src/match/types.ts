@@ -78,6 +78,11 @@ export type UnionToIntersection<U> = (U extends any
 export type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>
 export type Overwrite<T, U> = Omit<T, keyof T & keyof U> & U
 export type MakeKeysOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
+export type KeysEqual<T, V> = { [k in keyof T]-?: Equal<T[k], V> extends '1' ? k : never }[keyof T]
+export type KeysMatching<T, V> = { [k in keyof T]-?: Matches<T[k], V> extends '1' ? k : never }[keyof T]
+export type KeysMatching1<T, V> = { [k in keyof T]-?: Matches<V, T[k]> extends '1' ? k : never }[keyof T]
+export type UndefinedKeys<T> = KeysMatching1<T, undefined>
+export type Mutable<T> = { -readonly [k in keyof T]: T[k] }
 
 /**
  * Add an element to the end of a tuple

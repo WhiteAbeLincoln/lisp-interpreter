@@ -4,7 +4,7 @@ import {
 } from './symboltable/symboltable'
 import {
   isCons, car, listToIterable,
-  cdr, map, isList, fromArray,
+  cdr, map, fromArray,
   cons, append, ConsG, unsafeLength
 } from './Cons'
 import { printExpression } from './print'
@@ -25,7 +25,7 @@ const argumentlist = (arglist: SExpression): LambdaParam[] => {
   if (typeof arglist === 'symbol') return [{ sym: arglist, variadic: true }]
   if (!isCons(arglist)) throw new TypeError(`${printExpression(arglist)} is not an argument list`)
   const arr: Array<{ sym: symbol, variadic?: true }> = []
-  const list = [...listToIterable(arglist)]
+  const list = [...listToIterable(arglist, true)]
   for (let i = 0; i < list.length; ++i) {
     const v = list[i]
 
@@ -88,9 +88,9 @@ const bindParams = (table: SymbolTable, args: SExpression, arglist: LambdaParam[
     // this doesn't look right because pointer will never terminate
     // however, pointer should be a list, and should have the same length
     // as arglist or arglist is variadic
-    const value = isList(pointer) ? car(pointer) : pointer
+    const value = isCons(pointer) ? car(pointer) : pointer
     table.table.set(sym, value)
-    pointer = isList(pointer) ? cdr(pointer) : pointer
+    pointer = isCons(pointer) ? cdr(pointer) : pointer
   }
   if (allShadowed(table)) {
     // if every entry of the parent is shadowed, there is no point in keeping a reference to it
@@ -151,25 +151,31 @@ export const isMacroCall = (ast: SExpression, env: SymbolTable): ast is ConsG<sy
   return isMacro(value)
 }
 
-export const macroExpand = (ast: SExpression, env: SymbolTable) => {
-  while (isMacroCall(ast, env)) {
-    const { car: sym } = ast
-    const macro = getSymbol(env, sym) as MacroFn
-    const args = validate(ast, macro.numParams)
-    const expr = macro.body
-    const newEnv = bindParams(pushTable(env), args, macro.params)
-    ast = evalFn(newEnv, expr)
-  }
+export const macroExpand = (ast: SExpression, env: SymbolTable): SExpression => {
+  while (isMacroCall(ast, env))
+    ast = macroExpand1(ast, env)
   return ast
 }
 
+export const macroExpand1 = (ast: SExpression, env: SymbolTable): SExpression => {
+  if (!isMacroCall(ast, env))
+    return ast
+
+  const { car: sym } = ast
+  const macro = getSymbol(env, sym) as MacroFn
+  const args = validate(ast, macro.numParams)
+  const expr = macro.body
+  const newEnv = bindParams(pushTable(env), args, macro.params)
+  return evalFn(newEnv, expr)
+}
+
 export const applyFn = (env: SymbolTable) =>
-  (fn: LambdaFn | BootstrapFn) =>
+  (fn: LambdaFn | BootstrapFn | symbol) =>
   (...args: SExpression[]) =>
   evalFn(env, fromArray([fn, ...args]))
 
 export const applyFn1 = (env: SymbolTable) =>
-  (fn: LambdaFn | BootstrapFn) =>
+  (fn: LambdaFn | BootstrapFn | symbol) =>
   (args: Cons) =>
   evalFn(env, cons(fn, args))
 
@@ -301,7 +307,7 @@ export const evalFn = (env: SymbolTable, expr: SExpression): SExpression => {
     const { cdr: origArgs } = fncall
 
     if (f.curried) {
-      if (!isList(origArgs))
+      if (!isCons(origArgs))
         throw new TypeError(`argument list given to ${f.name} is dotted: ${printExpression(fncall)}`)
 
       const argLen = unsafeLength(origArgs)
@@ -319,7 +325,8 @@ export const evalFn = (env: SymbolTable, expr: SExpression): SExpression => {
     if (isLambdaFn(f)) {
       const args = validate(fncall, arity(f))
       expr = f.body
-      env = bindParams(pushTable(env), args, f.params)
+      const savedEnv = typeof f.env === 'function' ? f.env() : f.env
+      env = bindParams(pushTable(savedEnv), args, f.params)
       continue loop
     }
 

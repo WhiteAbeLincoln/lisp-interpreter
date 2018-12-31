@@ -1,17 +1,83 @@
+import preludeFile from '!raw-loader!./prelude.tlsp'
 import {
-  isProperList, unsafeLength, isList, ConsG,
-  isCons, reduce as reduceCons, cons, reduce1 as reduce1Cons, listToIterable,
+  isProperList, unsafeLength, ConsG,
+  isCons, reduce as reduceCons, listToIterable,
   car, cdr, fromArray, append, map as mapCons
 } from '../Cons'
+import * as consContext from '../Cons'
 import { printExpression } from '../print'
-import { t, f } from './common-symbols'
-import { SExpression, Cons, BootstrapFn, isLambdaFn, isBoostrapFn, LambdaFn, isProcedure, isMacro, arity, EmptyList } from '../SExpression'
-import { evalFn, macroExpand, applyFn, applyFn1 } from '../eval'
-import { symExpr, add, div, sub, mult, gt, lt, lte, gte, eq, tuple, isInterned } from '../util'
+import { t, f, T, F } from './common-symbols'
+import {
+  SExpression, Cons, BootstrapFn, isLambdaFn,
+  isBoostrapFn, LambdaFn, isProcedure, isMacro,
+  arity, EmptyList, sexprTypeOf, isSExpression, empty
+} from '../SExpression'
+import { evalFn, macroExpand, macroExpand1, } from '../eval'
+import { symExpr, add, div, sub, mult, gt, lt, lte, gte, eq, tuple, isInterned, compose } from '../util'
 import { reduce as reduceI } from '../iterable'
 import { Predicate } from '../match/types'
 import { readString } from '../parser'
-import { Fn } from '../match/functional'
+import { typeOf } from '../match/predicates'
+import vm from 'vm'
+
+const boolJsToLisp = (v: boolean) => v ? t : f
+const boolLispToJs = (v: SExpression) => v === f ? false : true
+
+const marshallValue = (evaluated: unknown): SExpression | null => {
+  if (isSExpression(evaluated))
+    return evaluated
+
+  if (typeof evaluated === 'function')
+    return createBoostrap(
+      (fncall, _env, numParams) => {
+        const args = validate(fncall, numParams)
+        const argsArr = listToIterable(args)
+        const result: unknown = evaluated(...argsArr)
+
+        const val = marshallValue(result)
+
+        if (val === null)
+          throw new Error(`function ${evaluated.name} returned invalid value`)
+
+        return val
+      },
+      evaluated.name,
+      evaluated.length,
+      evaluated.length > 1,
+    )
+
+  if (typeof evaluated === 'boolean')
+    return boolJsToLisp(evaluated)
+
+  if (Array.isArray(evaluated)) {
+    const mapped: SExpression[] = []
+
+    for (const x of evaluated as unknown[]) {
+      const m = marshallValue(x)
+      if (m === null)
+        return null
+      mapped.push(m)
+    }
+
+    return fromArray(mapped)
+  }
+
+  return null
+}
+
+
+const vmContext = vm.createContext({
+  tslisp: Object.freeze({
+    ...consContext,
+    bool: {
+      true: t,
+      false: f,
+      toLisp: boolJsToLisp,
+      toJs: boolLispToJs,
+    },
+    marshallValue,
+  })
+})
 
 export type SymbolTable = { parent: SymbolTable | null, table: Map<symbol, SExpression> }
 
@@ -122,7 +188,7 @@ export function validate(fncall: Cons, arglen: number | [number, number], proper
   const name = (fnNameSym as symbol).description || (fnNameSym as LambdaFn).name || '[lambda]'
   if (proper && !isProperList(args))
     throw new TypeError(`argument list given to ${name} is dotted: ${printExpression(fncall)}`)
-  if (!isList(args)) {
+  if (!isCons(args)) {
     if (!Array.isArray(arglen)) return args
     throw new TypeError(`argument list given to ${name} is dotted: ${printExpression(fncall)}`)
   }
@@ -136,41 +202,33 @@ export function validate(fncall: Cons, arglen: number | [number, number], proper
   return args
 }
 
-const accumulate = <T extends SExpression>(op: Fn<[T, T], T>, identity: T, pred: (v: SExpression) => v is T) =>
-  (fncall: Cons, _: SymbolTable, n: [number, number]): SExpression => {
-    const args = validate(fncall, n, false)
-    return reduceCons(op, identity, pred)(args)
-  }
+// const accumulate1 = <T extends SExpression>(op: Fn<[T, T], T>, identity: T, pred: (v: SExpression) => v is T) =>
+//   (fncall: Cons, _: SymbolTable, n: [number, number]): SExpression => {
+//     const { car: first, cdr: rest } = validate(fncall, n as [1, number], false)
+//     if (!pred(first))
+//       throw new TypeError(`accumulate1: ${printExpression(first)} is not the correct type`)
+//     if (!isCons(rest)) return op(identity, first)
+//     return reduce1Cons(op, pred)(cons(first, rest))
+//   }
 
-const accumulate1 = <T extends SExpression>(op: Fn<[T, T], T>, identity: T, pred: (v: SExpression) => v is T) =>
-  (fncall: Cons, _: SymbolTable, n: [number, number]): SExpression => {
-    const { car: first, cdr: rest } = validate(fncall, n as [1, number], false)
-    if (!pred(first))
-      throw new TypeError(`accumulate1: ${printExpression(first)} is not the correct type`)
-    if (!isCons(rest)) return op(identity, first)
-    return reduce1Cons(op, pred)(cons(first, rest))
-  }
+// const compare = (op: Fn<[number, number], boolean>) =>
+//   (fncall: Cons, _: SymbolTable, n: [number, number]): SExpression => {
+//     const args = validate(fncall, n, false)
 
-const isNum = (v: SExpression): v is number => typeof v === 'number'
+//     const argsArr = [...listToIterable(args, false)]
+//     for (let i = 1; i < argsArr.length; i++) {
+//       const first = argsArr[i - 1]
+//       const second = argsArr[i]
+//       if (typeof first !== 'number')
+//         throw new TypeError(`${printExpression(first)} is not a number`)
+//       if (typeof second !== 'number')
+//         throw new TypeError(`${printExpression(second)} is not a number`)
 
-const compare = (op: Fn<[number, number], boolean>) =>
-  (fncall: Cons, _: SymbolTable, n: [number, number]): SExpression => {
-    const args = validate(fncall, n, false)
-
-    const argsArr = [...listToIterable(args, false)]
-    for (let i = 1; i < argsArr.length; i++) {
-      const first = argsArr[i - 1]
-      const second = argsArr[i]
-      if (typeof first !== 'number')
-        throw new TypeError(`${printExpression(first)} is not a number`)
-      if (typeof second !== 'number')
-        throw new TypeError(`${printExpression(second)} is not a number`)
-
-      if (op(first, second)) continue
-      else return f
-    }
-    return t
-  }
+//       if (op(first, second)) continue
+//       else return f
+//     }
+//     return t
+//   }
 
 const createBoostrap = (
   body: BootstrapFn['body'],
@@ -229,14 +287,14 @@ function createBoostrapEntry<T extends string>(
 ): ReturnType<typeof createSExprEntry>
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
-  numParams: Parameters<typeof createBoostrap>[2],
+  numParams: number | [number, number],
   body: (args: Cons, env: SymbolTable, numParams: [number, number]) => SExpression,
   curry: boolean,
   doValidate: false,
 ): ReturnType<typeof createSExprEntry>
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
-  numParams: Parameters<typeof createBoostrap>[2],
+  numParams: number | [number, number],
   body: (args: SExpression, env: SymbolTable, numParams: [number, number]) => SExpression,
   curry?: boolean,
   doValidate?: boolean,
@@ -265,44 +323,67 @@ const createPred = <T extends string>(name: T | symbol, pred: Predicate<SExpress
     return pred(car) ? t : f
   })
 
+const createBinaryOp = <N extends string, T extends SExpression>(name: N | symbol, binary: (a: T, b: T) => SExpression, pred: (v: SExpression) => v is T) =>
+  createBoostrapEntry(name, 2, args => {
+    const { car: n1, cdr: { car: n2 }} = args
+    if (!pred(n1) || !pred(n2))
+      throw new Error(`${typeof name === 'string' ? name : name.description}: expected number`)
+    return binary(n1, n2)
+  }, true)
+
+let gensymCounter = 0
+
+const equal = (
+  args: ConsG<SExpression, ConsG<SExpression, SExpression>>,
+): T | F => {
+  // Object reference equality
+  const { car: o1, cdr: { car: o2 } } = args
+  return o1 === o2 ? t : f
+}
+
 const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
   createSExprEntry(t, t),
   createSExprEntry(f, f),
   createSExprEntry('Infinity', Infinity),
+  // since we don't have infinity as a special case when parsing numbers,
+  // we cannot use standard unary negation
+  createSExprEntry('-Infinity', -Infinity),
   createBoostrapEntry('eval', 1, args => {
     const { car: arg } = args as Cons
     return evalFn(symboltable, arg)
   }),
-  createBoostrapEntry('+', [0, Infinity], accumulate(add, 0, isNum), false, false),
-  createBoostrapEntry('-', [1, Infinity], accumulate1(sub, 0, isNum), false, false),
-  createBoostrapEntry('*', [0, Infinity], accumulate(mult, 1, isNum), false, false),
-  createBoostrapEntry('/', [1, Infinity], accumulate1(div, 1, isNum), false, false),
-  createBoostrapEntry('>', [1, Infinity], compare(gt), false, false),
-  createBoostrapEntry('<', [1, Infinity], compare(lt), false, false),
-  createBoostrapEntry('<=', [1, Infinity], compare(lte), false, false),
-  createBoostrapEntry('>=', [1, Infinity], compare(gte), false, false),
-  createBoostrapEntry('=', [1, Infinity], compare(eq), false, false),
+  createBoostrapEntry('typeof', 1, ({ car }) => sexprTypeOf(car)),
+  createBoostrapEntry('native-eval', 1, args => {
+    const { car: str } = args
+    if (typeof str !== 'string')
+      throw new Error('native-eval: expected string')
+
+    const evaluated: unknown = vm.runInContext(str, vmContext)
+
+    const val = marshallValue(evaluated)
+    if (val === null)
+      throw Error('native-eval: returned invalid value')
+
+    return val
+  }),
+  createBinaryOp('add', add, typeOf('number')),
+  createBinaryOp('sub', sub, typeOf('number')),
+  createBinaryOp('mult', mult, typeOf('number')),
+  createBinaryOp('div', div, typeOf('number')),
+  createBinaryOp('gt', compose(boolJsToLisp, gt), typeOf('number')),
+  createBinaryOp('lt', compose(boolJsToLisp, lt), typeOf('number')),
+  createBinaryOp('lte', compose(boolJsToLisp, lte), typeOf('number')),
+  createBinaryOp('gte', compose(boolJsToLisp, gte), typeOf('number')),
+  createBinaryOp('num=', compose(boolJsToLisp, eq), typeOf('number')),
+  createBinaryOp('str-concat', (a: string, b: string) => a + b, typeOf('string')),
   createBoostrapEntry('print', 1, args => {
     const { car: arg } = args
     console.log(printExpression(arg))
     return arg
   }),
-  // createBoostrapEntry('cons', 2, args => {
-  //   const { car: first, cdr: { car: second } } = args
-  //   return cons(first, second)
-  // }, true),
-  createBoostrapEntry('car', 1, args => {
-    const { car: arg } = args
-    if (!isList(arg))
-      throw new TypeError(`${printExpression(arg)} is not a list`)
-    return car(arg)
-  }),
-  createBoostrapEntry('cdr', 1, args => {
-    const { car: arg } = args
-    if (!isList(arg))
-      throw new TypeError(`${printExpression(arg)} is not a list`)
-    return cdr(arg)
-  }),
+  createBoostrapEntry('str', 1, ({ car }) => printExpression(car)),
+  createBoostrapEntry('car', 1, ({ car: arg }) => car(arg)),
+  createBoostrapEntry('cdr', 1, ({ car: arg }) => cdr(arg)),
   createBoostrapEntry('list*', [2, Infinity], args => {
     if (!isCons(args))
       throw new TypeError(`list*: Expecting cons, but recieved ${printExpression(args)}`)
@@ -311,23 +392,12 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
   createBoostrapEntry('append', [0, Infinity], args => {
     return append(listToIterable(args, false))
   }),
-  createBoostrapEntry('string-append', [1, Infinity],
-    accumulate1((a: string, b: string) => a + b, '', (v): v is string => typeof v === 'string'), false),
-  createBoostrapEntry('eq?', 2, args => {
-    // Object reference equality
-    const { car: o1, cdr: { car: o2 } } = args
-    return o1 === o2 ? t : f
-  }, true),
-  createPred('pair?', isCons),
+  createBoostrapEntry('eq?', 2, equal, true),
   createPred('list?', isProperList),
-  createPred('number?', v => typeof v === 'number'),
   createPred('integer?', v => typeof v === 'number' && Number.isInteger(v)),
   createPred('natural?', v => typeof v === 'number' && Number.isInteger(v) && v >= 0),
-  createPred('string?', v => typeof v === 'string'),
-  createPred('procedure?', isProcedure),
   createPred('lambda?', isLambdaFn),
   createPred('macro?', isMacro),
-  createPred('symbol?', v => typeof v === 'symbol'),
   createPred('symbol-interned?', v => {
     if (typeof v !== 'symbol')
       throw new TypeError(`Expected symbol?, given ${printExpression(v)}`)
@@ -343,16 +413,23 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
       throw new TypeError(`Expected number?, given ${printExpression(v)}`)
     return !Number.isFinite(v)
   }),
+  createBoostrapEntry('exit', [0, 1], args => {
+    const { car: num } = isCons(args) ? args : { car: 0 }
+    if (typeof num !== 'number')
+      throw new Error('exit: expected number')
+    process.exit(num)
+    return num
+  }),
   createBoostrapEntry('number->string', [1, 2], args => {
     const { car: num, cdr } = args
-    if (cdr !== f && !isList(cdr))
+    if (cdr !== empty && !isCons(cdr))
       throw new TypeError(`number->string: Expected the options to be a hash-map`)
 
     if (typeof num !== 'number')
       throw new TypeError(`number->string: Expected number, but recieved ${printExpression(num)}`)
 
     // TODO: replace with a proper hash-map implementation
-    const optionsIter = cdr === f ? [] : listToIterable(car(cdr as Cons), false)
+    const optionsIter = cdr === empty ? [] : listToIterable(car(cdr as Cons), false)
     console.log(cdr)
     type Options = { mode: 'radix' | 'fixed' | 'prec' | 'exp', param: number }
     const symbols = tuple(symExpr('radix'), symExpr('fixed'), symExpr('prec'), symExpr('exp'))
@@ -398,12 +475,6 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
       throw new TypeError(`${printExpression(arg)} is not a string`)
     return Symbol(arg)
   }),
-  createBoostrapEntry('symbol->string', 1, args => {
-    const { car: arg } = args
-    if (typeof arg !== 'symbol')
-      throw new TypeError(`Expected symbol?, given ${printExpression(arg)}`)
-    return arg.description || '<Unknown Symbol>'
-  }),
   createBoostrapEntry('read/string', 1, args => {
     const { car: arg } = args
     if (typeof arg !== 'string')
@@ -415,36 +486,10 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
     const { car: arg } = args
     return macroExpand(arg, env)
   }),
-  createBoostrapEntry('map', 2, (args, env) => {
-    const { car: fn, cdr: { car: list } } = args
-
-    if (!isProcedure(fn))
-      throw new Error('map: expects a function value')
-    if (!isProperList(list))
-      throw new Error('map: expects a proper list')
-    const [minExpected] = arity(fn)
-    if (minExpected > 1)
-      throw new Error('map: function arity is incorrect - must accept 1 or less parameters')
-
-    const jsFn = applyFn(env)(fn)
-
-    return mapCons(jsFn)(list)
-  }, true),
-  createBoostrapEntry('reduce', 3, (args, env) => {
-    const { car: fn, cdr: { car: init, cdr: { car: list }}} = args
-
-    if (!isProcedure(fn))
-      throw new Error('reduce: expects a function value')
-    if (!isProperList(list))
-      throw new Error('reduce: expects a proper list')
-    const [minExpected] = arity(fn)
-    if (minExpected > 2)
-      throw new Error('reduce: function arity is incorrect - must accept 2 or less parameters')
-
-    const jsFn = applyFn(env)(fn)
-
-    return reduceCons(jsFn, init)(list)
-  }, true),
+  createBoostrapEntry('macroexpand-1', 1, (args, env) => {
+    const { car: arg } = args
+    return macroExpand1(arg, env)
+  }),
   createBoostrapEntry('procedure-arity', 1, args => {
     const { car: fn } = args
     if (!isProcedure(fn))
@@ -467,9 +512,9 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
     const { car: name, cdr: { car: fn } } = args
 
     if (typeof name !== 'string')
-      throw new Error('procedure-rename: expected string')
+      throw new Error('rename-procedure: expected string')
     if (!isProcedure(fn))
-      throw new Error('procedure-rename: expected function')
+      throw new Error('rename-procedure: expected function')
 
     return { ...fn, name }
   }, true),
@@ -479,101 +524,36 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
       throw new Error('curry: expected function')
     return { ...fn, curried: fn.curried || [] }
   }),
+  createBoostrapEntry('gensym', [0, 1], args => {
+    let prefix = 'g'
+    if (isCons(args)) {
+      const { car } = args
+      if (typeof car !== 'string')
+        throw new Error('gensym: expected string prefix')
+      prefix = car
+    }
+
+    return Symbol(`${prefix}${gensymCounter++}`)
+  }),
+  createBoostrapEntry('throw', 1, args => {
+    const { car: message } = args
+    if (typeof message !== 'string')
+      throw new Error('throw: expected string message')
+    const err = new Error(message)
+    err.stack = undefined
+    throw err
+  }),
 ])
 
-export const symboltable = { parent: null, table: symboltableTable }
+export const symboltable = pushTable({ parent: null, table: symboltableTable })
 
+/**
+ * Evaluates lisp and mutates the root/prelude symbol table
+ * @param str
+ */
 export const rep = (str: string) =>
-  readString(str).map(e => printExpression(evalFn(symboltable, e)))
+  readString(str).map(e => printExpression(evalFn(symboltable.parent!, e)))
 
 // The standard library that can be defined using macros and the functions above in the symbol table
 
-rep(`
-  ;; sugar for defining a macro
-  (define defmacro
-      (macro (name params body)
-        \`(define ,name (macro ,params ,body))))
-  ;; sugar for defining a function
-  (define defun
-    (macro (name params body)
-      \`(define ,name (lambda ,params ,body))))
-  (defmacro defunC (name params body)
-      \`(define ,name (curry (lambda ,params ,body))))
-
-  ; combinators
-  ; identity
-  (defun I (x) x)
-  (define identity I)
-  ; const
-  (defunC K (x y) x)
-  (define const K)
-  ; apply ($)
-  (defunC A (f . a) (f . a))
-  ; thrush
-  (defunC T (a fn) (fn a))
-  ; duplication (join)
-  (defunC W (f x) ((f x) x))
-  ; flip
-  (defunC C (f x y) (f y x))
-  (define flip C)
-  ; compose
-  (defunC B (f g x) (f (g x)))
-  ; substitution (ap)
-  (defunC S (x y z) ((x z) (y z)))
-  ; psi (on)
-  (defunC P (f g x y) ((f (g x)) (g y)))
-
-  (defmacro if (pred true false)
-      \`(cond (,pred ,true) (t ,false)))
-  (defun not (bool) (if (eq? bool f) t f))
-
-  (defmacro let (bindings body)
-    \`((lambda ,(map car bindings) ,body)
-        ,@(map (lambda (xs) (car (cdr xs))) bindings)))
-
-  ; identity on lists
-  (defun list xs xs)
-  (defunC cons (a b) \`(,a . ,b))
-
-  (defun last (xs)
-    (if (list? xs)
-      (if (empty? xs)
-        (throw err)
-        ; (flip const) :: (a b) -> b
-        (reduce (flip const) '() xs))
-      (throw err)))
-
-  (define begin last)
-
-  (defun empty? (xs) (eq? xs '()))
-
-  (defunC nth (n xs)
-    (cond ; or
-      ; ((not (list? xs)) (throw "expected a list"))
-      ; ((not (natural? xs)) (throw "expected a natural number"))
-      (t (let (
-            (nth^
-              (lambda (n xs)
-                (if (= n 0)
-                  (car xs)
-                  (if (empty? (cdr xs))
-                    (throw "index out of bounds")
-                    (nth^ (- n 1) (cdr xs)))))))
-            (nth^ n xs)))))
-
-  ; (defun length (xs)
-  ;   (if
-  ;     (list? xs)
-  ;     (let
-  ;       ((len (lambda (xs n)
-  ;           (if
-  ;             (eq? xs '())
-  ;             n
-  ;             (len (cdr xs) (+ n 1))))))
-  ;       (len xs 0))
-  ;     (throw err)))
-  (defun length (xs)
-    (if (list? xs) (reduce (add 1) 0 xs) (throw err)))
-
-  (defunC add (x y) (+ x y))
-`)
+rep(preludeFile)

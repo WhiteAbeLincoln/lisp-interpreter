@@ -1,0 +1,283 @@
+;; ESSENTIAL MACROS ;;
+;;;;;;;;;;;;;;;;;;;;;;
+
+;; sugar for defining a macro
+(define defmacro
+  (macro (name params body)
+    `(define ,name (macro ,params ,body))))
+
+;; sugar for defining a function
+(define defun
+  (macro (name params body)
+    `(define ,name (lambda ,params ,body))))
+
+;; use a λ for lambda
+(defmacro λ args `(lambda ,@args))
+
+;; sugar for defining a curried function
+(defmacro defunC (name params body)
+    `(define ,name (curry (lambda ,params ,body))))
+
+(defmacro if (pred true false)
+  `(cond (,pred ,true) (t ,false)))
+
+(defun not (bool) (if (eq? bool f) t f))
+
+(defmacro && (first second)
+  `(if ,first (if ,second t f) f))
+
+(defmacro || (first second)
+  `(if ,first t (if ,second t f)))
+
+;; ESSENTIAL PREDICATES ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun pair? (x)
+  (eq? (typeof x) "pair"))
+(defun number? (x)
+  (eq? (typeof x) "number"))
+(defun string? (x)
+  (eq? (typeof x) "string"))
+(defun procedure? (x)
+  (eq? (typeof x) "procedure"))
+(defun symbol? (x)
+  (eq? (typeof x) "symbol"))
+(defun empty? (x)
+  (eq? (typeof x) "unit"))
+
+;; ESSENTIAL LISTS ;;
+;;;;;;;;;;;;;;;;;;;;;
+
+(define list (lambda xs xs))
+(defunC cons (a b) `(,a . ,b))
+(defmacro :: params `(cons ,@params))
+
+;; maybe not so essential - but an easy copy paste
+(defun caar   (x) (car (car x)))
+(defun cadr   (x) (car (cdr x)))
+(defun cdar   (x) (cdr (car x)))
+(defun cddr   (x) (cdr (cdr x)))
+(defun caaar  (x) (car (car (car x))))
+(defun caadr  (x) (car (car (cdr x))))
+(defun cadar  (x) (car (cdr (car x))))
+(defun caddr  (x) (car (cdr (cdr x))))
+(defun cdaar  (x) (cdr (car (car x))))
+(defun cdadr  (x) (cdr (car (cdr x))))
+(defun cddar  (x) (cdr (cdr (car x))))
+(defun cdddr  (x) (cdr (cdr (cdr x))))
+(defun caaaar (x) (car (car (car (car x)))))
+(defun caaadr (x) (car (car (car (cdr x)))))
+(defun caadar (x) (car (car (cdr (car x)))))
+(defun caaddr (x) (car (car (cdr (cdr x)))))
+(defun cadaar (x) (car (cdr (car (car x)))))
+(defun cadadr (x) (car (cdr (car (cdr x)))))
+(defun caddar (x) (car (cdr (cdr (car x)))))
+(defun cadddr (x) (car (cdr (cdr (cdr x)))))
+(defun cdaaar (x) (cdr (car (car (car x)))))
+(defun cdaadr (x) (cdr (car (car (cdr x)))))
+(defun cdadar (x) (cdr (car (cdr (car x)))))
+(defun cdaddr (x) (cdr (car (cdr (cdr x)))))
+(defun cddaar (x) (cdr (cdr (car (car x)))))
+(defun cddadr (x) (cdr (cdr (car (cdr x)))))
+(defun cdddar (x) (cdr (cdr (cdr (car x)))))
+(defun cddddr (x) (cdr (cdr (cdr (cdr x)))))
+
+(defunC foldl (fn init xs)
+  (if (empty? xs)
+    init
+    (foldl fn (fn (car xs) init) (cdr xs))))
+
+(defunC foldr (fn init xs)
+  (if (empty? xs)
+    init
+    (fn (car xs) (foldr fn init (cdr xs)))))
+
+(defunC map (fn xs) (foldr (λ (x ys) (:: (fn x) ys)) '() xs))
+(defunC filter (p xs) (foldr (λ (x ys) (if (p x) (:: x ys) ys)) '() xs))
+(define reverse (rename-procedure "reverse" (foldl :: '())))
+(define length (rename-procedure "length" (foldl (λ (_ a) (add 1 a)) 0)))
+
+;; SUGAR ;;
+;;;;;;;;;;;
+
+;; (defmacro test values
+;;   (cond
+;;     ((eq? (typeof exprs) "unit") '())))
+;; (defmacro begin exprs
+;;   (cond
+;;     ((eq? (typeof exprs) "unit") (throw "begin: empty list"))
+;;     ((eq? (typeof (cdr exprs)) "unit") (car exprs))
+;;     (t `((lambda (,(gensym)) (begin ,@(cdr exprs))) ,(car exprs)))))
+
+
+(defmacro let (bindings . body)
+  `((lambda ,(map car bindings) (begin ,@body))
+      ,@(map (lambda (xs) (car (cdr xs))) bindings)))
+
+(defmacro letbind (name bindings . body)
+  `(let ,bindings
+      (begin
+        (defun ,name ,(map car bindings) ,@body)
+        (,name ,@(map car bindings)))))
+
+(defmacro let* (bindings . body)
+  (letbind loop ((lst bindings))
+    (if (empty? lst)
+      `(begin ,@body)
+      `((lambda (,(caar lst))
+          ,(loop (cdr lst)))
+        ,(cadar lst)))))
+
+;; IF FRIENDS ;;
+;;;;;;;;;;;;;;;;;;
+(defmacro or xs
+  (if (empty? xs)
+    (throw "given empty condition list")
+    (if (num= 1 (length xs))
+      (car xs)
+      (let ((condvar (gensym)))
+        `(let ((,condvar ,(car xs)))
+            (if ,condvar ,condvar (or ,@(cdr xs))))))))
+(defmacro and xs
+  (if (empty? xs)
+    (throw "given empty condition list")
+    (if (num= 1 (length xs))
+      (car xs)
+      (let ((condvar (gensym)))
+        `(let ((,condvar ,(car xs)))
+            (if ,condvar (and ,@(cdr xs)) f))))))
+
+;; CONTRACTS ;;
+;;;;;;;;;;;;;;;
+
+(defunC proc-arity? (x fn)
+  (cond
+    ((not (procedure? fn)) (throw "expected fn to be a procedure"))
+    ((number? x) (eq? x (car (procedure-arity fn))))
+    ((pair? x) (equal? x (procedure-arity fn)))
+    (t (throw "expected a number or pair for x"))))
+(defun predicate? (a) (and (procedure? a) (proc-arity? 1 a)))
+(defun primitive? (a) (or (number? a) (string? a) (symbol? a) (procedure? a) (empty? a)))
+(defunC equal? (a b)
+  (cond
+    ((or (primitive? a) (primitive? b)) (eq? a b))
+    (t (and (equal? (car a) (car b)) (equal? (cdr a) (cdr b))))))
+
+(defmacro define/contract (name contract-fn value)
+  `(cond
+    ((not ,(symbol? name)) (throw "expected name to be a symbol"))
+    ((not (predicate? ,contract-fn)) (throw "expected contract to be a predicate"))
+    (t
+      (if
+        (,contract-fn ,value)
+        (define ,name ,value)
+        (throw (string-append
+                  ,(str name)
+                  " broke contract\nexpected: "
+                  ,(str contract-fn)
+                  "\nrecieved: " ,(str value)))))))
+
+(defun any/c (x) t)
+(defun none/c (x) f)
+
+(defmacro or/c contracts
+  `(cond
+    ((not (listof predicate? ,contracts)) (throw "expected contracts to be a list of predicates"))
+    (t (lambda (a) (list-some (T a) contracts)))))
+
+(defun and/c contracts
+  (cond
+    ((not (listof predicate? contracts)) (throw "expected contracts to be a list of predicates"))
+    (t (lambda (a) (list-every (T a) contracts)))))
+
+(defunC listof (c list)
+  (cond
+    ((not (predicate? c)) (throw "expected contract to be a predicate"))
+    ((not (list? list)) f)
+    (t (list-every c list))))
+
+(defun not/c (contract)
+  (cond
+    ((not (predicate? contract)) (throw "expected contract to be a predicate"))
+    (t (lambda (a) (not (contract a))))))
+
+(defunC non-empty-listof (c list)
+  (and (listof c list) (not (empty? list))))
+
+(defunC cons/c (carc cdrc pair)
+  (cond
+    ((not (predicate? carc)) (throw "expected predicate"))
+    ((not (predicate? cdrc)) (throw "expected predicate"))
+    (t (and (pair? pair) (carc (car pair)) (cdrc (cdr pair))))))
+
+;; COMBINATORS ;;
+;;;;;;;;;;;;;;;;;
+
+; identity
+(defun I (x) x)
+(define identity I)
+; const
+(defunC K (x y) x)
+(define const K)
+; apply ($)
+(defunC A (f . a) (f . a))
+; thrush
+(defunC T (a fn) (fn a))
+; duplication (join)
+(defunC W (f x) ((f x) x))
+; flip
+(defunC C (f x y) (f y x))
+(define flip C)
+; compose
+(defunC B (f g x) (f (g x)))
+; substitution (ap)
+(defunC S (x y z) ((x z) (y z)))
+; psi (on)
+(defunC P (f g x y) ((f (g x)) (g y)))
+
+;; LISTS ;;
+;;;;;;;;;;;
+
+; identity on lists
+(defun sum (acc xs)
+  (if (empty? xs)
+    acc
+    (sum (add acc (car xs)) (cdr xs))))
+
+(defun last (xs)
+  (cond
+    ((not (list? xs)) (throw "expected a list"))
+    ((empty? xs) (throw "list is empty"))
+    ; (flip const) :: (a b) -> b
+    (t (foldl (flip const) '() xs))))
+
+(defunC nth (n xs)
+  (cond
+    ((not (list? xs)) (throw "expected a list"))
+    ((not (natural? n)) (throw "expected a natural number"))
+    (t (begin
+          (defun nth^ (n xs)
+            (if (= n 0)
+              (car xs)
+              (if (empty? (cdr xs))
+                (throw "index out of bounds")
+                (nth^ (sub n 1) (cdr xs)))))
+          (nth^ n xs)))))
+
+(defunC list-some (pred xs)
+  (cond
+    ((not (list? xs)) (throw "expected a list"))
+    ((empty? xs) f)
+    ((pred (car xs)) t)
+    (t (list-some pred (cdr xs)))
+  ))
+
+(defunC list-every (pred xs)
+  (cond
+    ((not (list? xs)) (throw "expected a list"))
+    ((empty? xs) t)
+    ((not (pred (car xs))) f)
+    (t (list-every pred (cdr xs)))
+  ))
+
+;; vim: ft=lisp

@@ -1,4 +1,4 @@
-import { cons, consProper } from './Cons'
+import { cons, consProper, setCdr } from './Cons'
 import {
   CloseParen, isDotDelim, isNum, isQuote,
   isString, isSymbol, NumToken, OpenParen,
@@ -91,13 +91,13 @@ export const parser = (toks: Token[]) => {
       // and return
       if (isDotDelim(lookahead)) {
         match(isDotDelim)
-        pointer.cdr = sexp()
+        setCdr(pointer, sexp())
         break
       }
       const next = sexp()
       const nextConsList = consProper(next)
       // attach the nextConsList to the current
-      pointer.cdr = nextConsList
+      setCdr(pointer, nextConsList)
       // make pointer point to the next
       pointer = nextConsList
     }

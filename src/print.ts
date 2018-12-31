@@ -1,5 +1,5 @@
 import { symDesc } from './util'
-import { isCons, listToIterable } from './Cons'
+import { isCons, listToIterable, fromArray } from './Cons'
 import { quoteSym, quasiquoteSym, unquoteSpliceSym, unquoteSym } from './symboltable/common-symbols'
 import { SExpression, isLambdaFn, isBoostrapFn, isMacro, empty, isEmptyList } from './SExpression'
 
@@ -16,7 +16,7 @@ export const printExpression = (val: SExpression, expand = false): string => {
     // if cdr is not nil, i.e. val is an improper list
     // we print a . and then cdr
     let str = '('
-    const consArr = [...listToIterable(val)]
+    const consArr = [...listToIterable(val, true)]
     // special case for proper quotes
     if (consArr.length === 3 && consArr[2] === empty && !expand) {
       const quote = consArr[0]
@@ -45,8 +45,12 @@ export const printExpression = (val: SExpression, expand = false): string => {
     str += ')'
     return str
   }
-  if (isLambdaFn(val) || isBoostrapFn(val))
-    return `<${isMacro(val) ? 'macro' : 'procedure'}${val.name ? ':' + val.name : ''}>`
+  if (isLambdaFn(val) || isBoostrapFn(val)) {
+    const kind = isMacro(val) ? 'macro' : 'procedure'
+    const name = val.name ? ':' + val.name : ''
+    const curry = val.curried && val.curried.length > 0 ? `:${printExpression(fromArray(val.curried), expand)}` : ''
+    return `<${kind}${name}${curry}>`
+  }
   if (isEmptyList(val))
     return '()'
   return val

@@ -19,9 +19,10 @@ export type TypeName =
   | 'string'
   | 'symbol'
   | 'function'
+  | 'bigint'
 
 export type TypeFromName<
-  T
+  T extends TypeName
 > = T extends 'undefined' ? undefined      // prettier-ignore
   : T extends 'object'    ? object | null  // prettier-ignore
   : T extends 'boolean'   ? boolean        // prettier-ignore
@@ -29,19 +30,20 @@ export type TypeFromName<
   : T extends 'string'    ? string         // prettier-ignore
   : T extends 'symbol'    ? symbol         // prettier-ignore
   : T extends 'function'  ? (...args: any[]) => any // prettier-ignore
+  : T extends 'bigint'    ? bigint
   : never // prettier-ignore
 
-export type Primitives = string | number | boolean | symbol
+export type Primitives = string | number | boolean | symbol | bigint
 
 /**
  * Refinement function for typeof
  * @param type any string used with the typeof operator
  * @returns a refinement function that returns `typeof v === type`
  */
-export const typeOf = <T extends TypeName>(
-  type: T,
-): Refinement<any, TypeFromName<T>> => (v): v is TypeFromName<T> =>
-  typeof v === type
+export const typeOf = <Ts extends [TypeName, ...TypeName[]]>(
+  ...types: Ts
+): Refinement<any, TypeFromName<Ts[number]>> => (v): v is TypeFromName<Ts[number]> =>
+  types.includes(typeof v)
 
 /**
  * Refines the type of a value to null

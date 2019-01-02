@@ -15,7 +15,6 @@ export const unquoteSym = symExpr('unquote')
 export const unquoteSpliceSym = symExpr('unquote-splicing')
 export const defineSym = symExpr('define')
 export const lambdaSym = symExpr('lambda')
-export const macroSym = symExpr('macro')
 
 export const t = symExpr('t')
 export const f = symExpr('f')

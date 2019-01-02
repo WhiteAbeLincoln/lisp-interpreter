@@ -1,15 +1,14 @@
-;; ESSENTIAL MACROS ;;
-;;;;;;;;;;;;;;;;;;;;;;
-
-;; sugar for defining a macro
-(define defmacro
-  (macro (name params body)
-    `(define ,name (macro ,params ,body))))
+;;; ESSENTIAL MACROS
 
 ;; sugar for defining a function
 (define defun
-  (macro (name params body)
-    `(define ,name (lambda ,params ,body))))
+  (macro (lambda (name params body)
+    `(define ,name (lambda ,params ,body)))))
+
+;; sugar for defining a macro
+(define defmacro
+  (macro (lambda (name params body)
+    `(define ,name (macro (lambda ,params ,body))))))
 
 ;; use a λ for lambda
 (defmacro λ args `(lambda ,@args))
@@ -21,16 +20,7 @@
 (defmacro if (pred true false)
   `(cond (,pred ,true) (t ,false)))
 
-(defun not (bool) (if (eq? bool f) t f))
-
-(defmacro && (first second)
-  `(if ,first (if ,second t f) f))
-
-(defmacro || (first second)
-  `(if ,first t (if ,second t f)))
-
-;; ESSENTIAL PREDICATES ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ESSENTIAL PREDICATES
 
 (defun pair? (x)
   (eq? (typeof x) "pair"))
@@ -45,8 +35,7 @@
 (defun empty? (x)
   (eq? (typeof x) "unit"))
 
-;; ESSENTIAL LISTS ;;
-;;;;;;;;;;;;;;;;;;;;;
+;;; ESSENTIAL LISTS
 
 (define list (lambda xs xs))
 (defunC cons (a b) `(,a . ,b))
@@ -97,43 +86,33 @@
 (define reverse (rename-procedure "reverse" (foldl :: '())))
 (define length (rename-procedure "length" (foldl (λ (_ a) (add 1 a)) 0)))
 
-;; SUGAR ;;
-;;;;;;;;;;;
+;;; SUGAR
 
-;; (defmacro test values
-;;   (cond
-;;     ((eq? (typeof exprs) "unit") '())))
-;; (defmacro begin exprs
-;;   (cond
-;;     ((eq? (typeof exprs) "unit") (throw "begin: empty list"))
-;;     ((eq? (typeof (cdr exprs)) "unit") (car exprs))
-;;     (t `((lambda (,(gensym)) (begin ,@(cdr exprs))) ,(car exprs)))))
+(defmacro let (bindings body)
+  `((lambda ,(map car bindings) ,body)
+      ,@(map cadr bindings)))
 
-
-(defmacro let (bindings . body)
-  `((lambda ,(map car bindings) (begin ,@body))
-      ,@(map (lambda (xs) (car (cdr xs))) bindings)))
-
-(defmacro letbind (name bindings . body)
+(defmacro letfn (name bindings body)
   `(let ,bindings
-      (begin
-        (defun ,name ,(map car bindings) ,@body)
-        (,name ,@(map car bindings)))))
+      ((lambda (,(gensym)) (,name ,@(map car bindings)))
+        (defun ,name ,(map car bindings) ,body))))
 
-(defmacro let* (bindings . body)
-  (letbind loop ((lst bindings))
+(defmacro let* (bindings body)
+  (letfn loop ((lst bindings))
     (if (empty? lst)
-      `(begin ,@body)
+      `,body
       `((lambda (,(caar lst))
           ,(loop (cdr lst)))
         ,(cadar lst)))))
 
-;; IF FRIENDS ;;
-;;;;;;;;;;;;;;;;;;
+;;; IF FRIENDS
+
+(defun not (bool) (if (eq? bool f) t f))
+
 (defmacro or xs
   (if (empty? xs)
     (throw "given empty condition list")
-    (if (num= 1 (length xs))
+    (if (num=? 1 (length xs))
       (car xs)
       (let ((condvar (gensym)))
         `(let ((,condvar ,(car xs)))
@@ -141,14 +120,13 @@
 (defmacro and xs
   (if (empty? xs)
     (throw "given empty condition list")
-    (if (num= 1 (length xs))
+    (if (num=? 1 (length xs))
       (car xs)
       (let ((condvar (gensym)))
         `(let ((,condvar ,(car xs)))
             (if ,condvar (and ,@(cdr xs)) f))))))
 
-;; CONTRACTS ;;
-;;;;;;;;;;;;;;;
+;;; CONTRACTS
 
 (defunC proc-arity? (x fn)
   (cond
@@ -210,74 +188,108 @@
     ((not (predicate? cdrc)) (throw "expected predicate"))
     (t (and (pair? pair) (carc (car pair)) (cdrc (cdr pair))))))
 
-;; COMBINATORS ;;
-;;;;;;;;;;;;;;;;;
+;;; COMBINATORS
+;; TODO: Properly implement this
+(defmacro apply (f lst)
+  `(cond
+    ((not (procedure? ,f)) (throw "expected a procedure"))
+    ((not (list? ,lst)) (throw "expected a list"))
+    (t (throw "unimplemented"))))
 
-; identity
+;; identity
 (defun I (x) x)
 (define identity I)
-; const
+;; const
 (defunC K (x y) x)
 (define const K)
-; apply ($)
-(defunC A (f . a) (f . a))
-; thrush
+;; apply ($)
+(defunC A (f . a) (apply f a))
+;; thrush
 (defunC T (a fn) (fn a))
-; duplication (join)
+;; duplication (join)
 (defunC W (f x) ((f x) x))
-; flip
+;; flip
 (defunC C (f x y) (f y x))
 (define flip C)
-; compose
+;; compose
 (defunC B (f g x) (f (g x)))
-; substitution (ap)
+;; substitution (ap)
 (defunC S (x y z) ((x z) (y z)))
-; psi (on)
+;; psi (on)
 (defunC P (f g x y) ((f (g x)) (g y)))
 
-;; LISTS ;;
-;;;;;;;;;;;
-
-; identity on lists
-(defun sum (acc xs)
-  (if (empty? xs)
-    acc
-    (sum (add acc (car xs)) (cdr xs))))
+;;; LISTS
 
 (defun last (xs)
   (cond
     ((not (list? xs)) (throw "expected a list"))
     ((empty? xs) (throw "list is empty"))
-    ; (flip const) :: (a b) -> b
+    ;; (flip const) :: (a b) -> b
     (t (foldl (flip const) '() xs))))
 
 (defunC nth (n xs)
   (cond
     ((not (list? xs)) (throw "expected a list"))
     ((not (natural? n)) (throw "expected a natural number"))
-    (t (begin
-          (defun nth^ (n xs)
-            (if (= n 0)
-              (car xs)
-              (if (empty? (cdr xs))
-                (throw "index out of bounds")
-                (nth^ (sub n 1) (cdr xs)))))
-          (nth^ n xs)))))
+    (t (letfn loop ((num n) (lst xs))
+        (if (num=? num 0)
+          (car lst)
+          (if (empty? (cdr lst))
+            (throw "index out of bounds")
+            (loop (sub num 1) (cdr lst))))))))
 
 (defunC list-some (pred xs)
   (cond
     ((not (list? xs)) (throw "expected a list"))
-    ((empty? xs) f)
-    ((pred (car xs)) t)
-    (t (list-some pred (cdr xs)))
-  ))
+    ((not (predicate? pred)) (throw "expected a predicate"))
+    (t (letfn loop ((lst xs))
+      (cond
+        ((empty? lst) f)
+        ((pred (car lst)) t)
+        (t (loop (cdr lst))))))))
 
 (defunC list-every (pred xs)
   (cond
     ((not (list? xs)) (throw "expected a list"))
-    ((empty? xs) t)
-    ((not (pred (car xs))) f)
-    (t (list-every pred (cdr xs)))
-  ))
+    ((not (predicate? pred)) (throw "expected a predicate"))
+    (t (letfn loop ((lst xs))
+      (cond
+        ((empty? lst) t)
+        ((not (pred (car lst))) f)
+        (t (loop (cdr lst))))))))
+
+;;; NUMBERS
+
+(defun + nums (foldl add 0 nums))
+(defun * nums (foldl mult 1 nums))
+(defun - (init . nums)
+  (if (empty? nums)
+    (sub 0 init)
+    (foldl (flip sub) init nums)))
+(defun / (init . nums)
+  (if (empty? nums)
+    (div 1 init)
+    (foldl (flip div) init nums)))
+(defun = (x1 x2 . xs)
+  (list-every (num=? x1) (cons x2 xs)))
+
+;; TODO: add a module system so this doesn't get added to the exported environment
+(defun compare (fn x y lst)
+  (if (empty? lst)
+      (fn x y)
+      (and
+        (fn x y)
+        (compare fn y (car lst) (cdr lst)))))
+
+(defun < (x1 x2 . xs) (compare lt x1 x2 xs))
+(defun <= (x1 x2 . xs) (compare lte x1 x2 xs))
+(defun > (x1 x2 . xs) (compare gt x1 x2 xs))
+(defun >= (x1 x2 . xs) (compare gte x1 x2 xs))
+(define zero? (num=? 0))
+(define negative? ((flip lt) 0))
+(define positive? ((flip gt) 0))
+(defun even? (x) (zero? (modulo x 2)))
+(define odd? (not/c even?))
+(defun abs (x) (if (negative? x) (- x) x))
 
 ;; vim: ft=lisp

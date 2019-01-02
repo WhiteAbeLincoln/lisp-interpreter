@@ -1,18 +1,19 @@
 import preludeFile from '!raw-loader!./prelude.tlsp'
 import { printExpression } from '../print'
 import { evalFn, macroExpand, macroExpand1, } from '../eval'
-import { add, div, sub, mult, gt, lt, lte, gte, eq, tuple, compose } from '../util'
-import { reduce as reduceI } from '../iterable'
-import { Predicate } from '../match/types'
+import { add, div, sub, mult, gt, lt, lte, gte, eq, modulo } from '../util/util'
+import { reduce as reduceI } from '../util/iterable'
+import { Predicate } from '../util/functional/types'
 import { readString } from '../parser'
-import { typeOf } from '../match/predicates'
+import { typeOf } from '../util/functional/predicates'
 import {
   SExpression, ConsG, EmptyList,
-  Cons, LambdaFn, SymbolTable,
+  Cons, LambdaFn, SymbolTable, isEmptyList,
 } from '../runtime'
 import * as R from '../runtime'
 import { t, f, T, F } from '../runtime/common-symbols'
 import vm from 'vm'
+import { compose, tuple } from '../util/functional/functional';
 
 
 export const vmContext = vm.createContext({
@@ -81,41 +82,18 @@ type CPair5<
   T5 extends SExpression = SExpression,
 > = ConsG<T1, CPair4<T2, T3, T4, T5>>
 
-type CTuple1<T extends SExpression = SExpression> = ConsG<T, EmptyList>
-type CTuple2<
-  T1 extends SExpression = SExpression,
-  T2 extends SExpression = SExpression,
-> = ConsG<T1, CTuple1<T2>>
-type CTuple3<
-  T1 extends SExpression = SExpression,
-  T2 extends SExpression = SExpression,
-  T3 extends SExpression = SExpression,
-> = ConsG<T1, CTuple2<T2, T3>>
-type CTuple4<
-  T1 extends SExpression = SExpression,
-  T2 extends SExpression = SExpression,
-  T3 extends SExpression = SExpression,
-  T4 extends SExpression = SExpression,
-> = ConsG<T1, CTuple3<T2, T3, T4>>
-type CTuple5<
-  T1 extends SExpression = SExpression,
-  T2 extends SExpression = SExpression,
-  T3 extends SExpression = SExpression,
-  T4 extends SExpression = SExpression,
-  T5 extends SExpression = SExpression,
-> = ConsG<T1, CTuple4<T2, T3, T4, T5>>
-
-export function validate(fncall: Cons, arglen: [5, number], proper?: boolean): CPair5
-export function validate(fncall: Cons, arglen: [4, number], proper?: boolean): CPair4
-export function validate(fncall: Cons, arglen: [3, number], proper?: boolean): CPair3
-export function validate(fncall: Cons, arglen: [2, number], proper?: boolean): CPair2
-export function validate(fncall: Cons, arglen: [1, number], proper?: boolean): CPair1
-export function validate(fncall: Cons, arglen: 5, proper?: true): CTuple5
-export function validate(fncall: Cons, arglen: 4, proper?: true): CTuple4
-export function validate(fncall: Cons, arglen: 3, proper?: true): CTuple3
-export function validate(fncall: Cons, arglen: 2, proper?: true): CTuple2
-export function validate(fncall: Cons, arglen: 1, proper?: true): CTuple1
-export function validate(fncall: Cons, arglen: number | [number, number], proper?: true): Cons
+/** case 5 */
+export function validate(fncall: Cons, arglen: 5 | [5, number], proper?: boolean): CPair5
+/** case 4 */
+export function validate(fncall: Cons, arglen: 4 | [4, number], proper?: boolean): CPair4
+/** case 3 */
+export function validate(fncall: Cons, arglen: 3 | [3, number], proper?: boolean): CPair3
+/** case 2 */
+export function validate(fncall: Cons, arglen: 2 | [2, number], proper?: boolean): CPair2
+/** case 1 */
+export function validate(fncall: Cons, arglen: 1 | [1, number], proper?: boolean): CPair1
+/** case proper uninferred */
+/** case uninferred */
 export function validate(fncall: Cons, arglen: number | [number, number], proper?: boolean): SExpression
 export function validate(fncall: Cons, arglen: number | [number, number], proper = true): SExpression {
   const { car: fnNameSym, cdr: args } = fncall
@@ -126,8 +104,7 @@ export function validate(fncall: Cons, arglen: number | [number, number], proper
   const name = (fnNameSym as symbol).description || (fnNameSym as LambdaFn).name || '[lambda]'
   if (proper && !R.isProperList(args))
     throw new TypeError(`argument list given to ${name} is dotted: ${printExpression(fncall)}`)
-  if (!R.isCons(args)) {
-    if (!Array.isArray(arglen)) return args
+  if (!R.isCons(args) && !R.isEmptyList(args)) {
     throw new TypeError(`argument list given to ${name} is dotted: ${printExpression(fncall)}`)
   }
 
@@ -140,38 +117,11 @@ export function validate(fncall: Cons, arglen: number | [number, number], proper
   return args
 }
 
-// const accumulate1 = <T extends SExpression>(op: Fn<[T, T], T>, identity: T, pred: (v: SExpression) => v is T) =>
-//   (fncall: Cons, _: SymbolTable, n: [number, number]): SExpression => {
-//     const { car: first, cdr: rest } = validate(fncall, n as [1, number], false)
-//     if (!pred(first))
-//       throw new TypeError(`accumulate1: ${printExpression(first)} is not the correct type`)
-//     if (!isCons(rest)) return op(identity, first)
-//     return reduce1Cons(op, pred)(cons(first, rest))
-//   }
-
-// const compare = (op: Fn<[number, number], boolean>) =>
-//   (fncall: Cons, _: SymbolTable, n: [number, number]): SExpression => {
-//     const args = validate(fncall, n, false)
-
-//     const argsArr = [...listToIterable(args, false)]
-//     for (let i = 1; i < argsArr.length; i++) {
-//       const first = argsArr[i - 1]
-//       const second = argsArr[i]
-//       if (typeof first !== 'number')
-//         throw new TypeError(`${printExpression(first)} is not a number`)
-//       if (typeof second !== 'number')
-//         throw new TypeError(`${printExpression(second)} is not a number`)
-
-//       if (op(first, second)) continue
-//       else return f
-//     }
-//     return t
-//   }
-
 const createSExprEntry =
   <T extends string>(symbol: symbol | T, value: SExpression): [symbol, SExpression] =>
     [typeof symbol === 'string' ? R.Symbols.symExpr(symbol) : symbol, value]
 
+/** case 5 */
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
   numParams: 5 | [5, number],
@@ -179,6 +129,7 @@ function createBoostrapEntry<T extends string>(
   curry?: boolean,
   doValidate?: true,
 ): ReturnType<typeof createSExprEntry>
+/** case 4 */
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
   numParams: 4 | [4, number],
@@ -186,6 +137,7 @@ function createBoostrapEntry<T extends string>(
   curry?: boolean,
   doValidate?: true,
 ): ReturnType<typeof createSExprEntry>
+/** case 3 */
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
   numParams: 3 | [3, number],
@@ -193,6 +145,7 @@ function createBoostrapEntry<T extends string>(
   curry?: boolean,
   doValidate?: true,
 ): ReturnType<typeof createSExprEntry>
+/** case 2 */
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
   numParams: 2 | [2, number],
@@ -200,6 +153,7 @@ function createBoostrapEntry<T extends string>(
   curry?: boolean,
   doValidate?: true,
 ): ReturnType<typeof createSExprEntry>
+/** case 1 */
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
   numParams: 1 | [1, number],
@@ -207,6 +161,7 @@ function createBoostrapEntry<T extends string>(
   curry?: boolean,
   doValidate?: true,
 ): ReturnType<typeof createSExprEntry>
+/** case uninferred */
 function createBoostrapEntry<T extends string>(
   symbol: T | symbol,
   numParams: number | [number, number],
@@ -253,6 +208,14 @@ const createBinaryOp = <N extends string, T extends SExpression>(name: N | symbo
     return binary(n1, n2)
   }, true)
 
+const createUnaryOp = <N extends string, T extends SExpression>(name: N | symbol, unary: (a: T) => SExpression, pred: (v: SExpression) => v is T) =>
+  createBoostrapEntry(name, 1, args => {
+    const { car: n1 } = args
+    if (!pred(n1))
+      throw new Error(`${typeof name === 'string' ? name : name.description}: expected number`)
+    return unary(n1)
+  })
+
 let gensymCounter = 0
 
 const equal = (
@@ -266,65 +229,40 @@ const equal = (
 const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
   createSExprEntry(t, t),
   createSExprEntry(f, f),
+
+/* Typecheck and Equality */
+  createBoostrapEntry('typeof', 1, ({ car }) => R.Util.sexprTypeOf(car)),
+  createBoostrapEntry('eq?', 2, equal, true),
+
+/* Numbers */
   createSExprEntry('Infinity', Infinity),
   // since we don't have infinity as a special case when parsing numbers,
   // we cannot use standard unary negation
   createSExprEntry('-Infinity', -Infinity),
-  createBoostrapEntry('eval', 1, args => {
-    const { car: arg } = args as Cons
-    return evalFn(symboltable, arg)
-  }),
-  createBoostrapEntry('typeof', 1, ({ car }) => R.Util.sexprTypeOf(car)),
-  createBoostrapEntry('native-eval', 1, args => {
-    const { car: str } = args
-    if (typeof str !== 'string')
-      throw new Error('native-eval: expected string')
-
-    const evaluated: unknown = vm.runInContext(str, vmContext)
-
-    const val = R.Util.marshallValue(evaluated)
-    if (val === null)
-      throw Error('native-eval: returned invalid value')
-
-    return val
-  }),
+  // Basic Operators
   createBinaryOp('add', add, typeOf('number')),
   createBinaryOp('sub', sub, typeOf('number')),
   createBinaryOp('mult', mult, typeOf('number')),
   createBinaryOp('div', div, typeOf('number')),
+  // createBinaryOp('quotient', Math., typeOf('number')),
+  // createBinaryOp('remainder', Math., typeOf('number')),
+  createBinaryOp('modulo', modulo, typeOf('number')),
+  // createBinaryOp('gcd', Math., typeOf('number')),
+  // createBinaryOp('lcm', Math., typeOf('number')),
+  createBinaryOp('expt', Math.pow, typeOf('number')),
+  createUnaryOp('sqrt', Math.sqrt, typeOf('number')),
+  // Approximation
+  createUnaryOp('floor', Math.floor, typeOf('number')),
+  createUnaryOp('ceiling', Math.ceil, typeOf('number')),
+  createUnaryOp('truncate', Math.trunc, typeOf('number')),
+  createUnaryOp('round', Math.round, typeOf('number')),
+  // Inequalities
   createBinaryOp('gt', compose(R.Util.boolToLisp, gt), typeOf('number')),
   createBinaryOp('lt', compose(R.Util.boolToLisp, lt), typeOf('number')),
   createBinaryOp('lte', compose(R.Util.boolToLisp, lte), typeOf('number')),
   createBinaryOp('gte', compose(R.Util.boolToLisp, gte), typeOf('number')),
-  createBinaryOp('num=', compose(R.Util.boolToLisp, eq), typeOf('number')),
-  createBinaryOp('str-concat', (a: string, b: string) => a + b, typeOf('string')),
-  createBoostrapEntry('print', 1, args => {
-    const { car: arg } = args
-    console.log(printExpression(arg))
-    return arg
-  }),
-  createBoostrapEntry('str', 1, ({ car }) => printExpression(car)),
-  createBoostrapEntry('car', 1, ({ car: arg }) => R.ConsLib.car(arg)),
-  createBoostrapEntry('cdr', 1, ({ car: arg }) => R.ConsLib.cdr(arg)),
-  createBoostrapEntry('list*', [2, Infinity], args => {
-    if (!R.isCons(args))
-      throw new TypeError(`list*: Expecting cons, but recieved ${printExpression(args)}`)
-    return R.ConsLib.fromArray([...R.ConsLib.listToIterable(args, false)], { notProper: true })
-  }),
-  createBoostrapEntry('append', [0, Infinity], args => {
-    return R.ConsLib.append(R.ConsLib.listToIterable(args, false))
-  }),
-  createBoostrapEntry('eq?', 2, equal, true),
-  createPred('list?', R.isProperList),
-  createPred('integer?', v => typeof v === 'number' && Number.isInteger(v)),
-  createPred('natural?', v => typeof v === 'number' && Number.isInteger(v) && v >= 0),
-  createPred('lambda?', R.isLambdaFn),
-  createPred('macro?', R.isMacro),
-  createPred('symbol-interned?', v => {
-    if (typeof v !== 'symbol')
-      throw new TypeError(`Expected symbol?, given ${printExpression(v)}`)
-    return R.isInterned(v)
-  }),
+  createBinaryOp('num=?', compose(R.Util.boolToLisp, eq), typeOf('number')),
+  // Misc Predicates
   createPred('nan?', v => {
     if (typeof v !== 'number')
       throw new TypeError(`Expected number?, given ${printExpression(v)}`)
@@ -335,13 +273,19 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
       throw new TypeError(`Expected number?, given ${printExpression(v)}`)
     return !Number.isFinite(v)
   }),
-  createBoostrapEntry('exit', [0, 1], args => {
-    const { car: num } = R.isCons(args) ? args : { car: 0 }
-    if (typeof num !== 'number')
-      throw new Error('exit: expected number')
-    process.exit(num)
-    return num
-  }),
+  createPred('integer?', v => typeof v === 'number' && Number.isInteger(v)),
+  createPred('natural?', v => typeof v === 'number' && Number.isInteger(v) && v >= 0),
+  // Trigonometry
+  createUnaryOp('sin', Math.sin, typeOf('number')),
+  createUnaryOp('cos', Math.cos, typeOf('number')),
+  createUnaryOp('tan', Math.tan, typeOf('number')),
+  createUnaryOp('asin', Math.asin, typeOf('number')),
+  createUnaryOp('acos', Math.acos, typeOf('number')),
+  createUnaryOp('atan', Math.atan, typeOf('number')),
+  // Exponentials
+  createUnaryOp('log', Math.log, typeOf('number')),
+  createUnaryOp('exp', Math.exp, typeOf('number')),
+  // Input-output
   createBoostrapEntry('number->string', [1, 2], args => {
     const { car: num, cdr } = args
     if (cdr !== R.empty && !R.isCons(cdr))
@@ -385,6 +329,43 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
       : mode === 'prec' ? num.toPrecision(param)
       : mode
   }),
+  createBoostrapEntry('string->number', [1, 2], args => {
+    const { car: num, cdr } = args
+    const radix = isEmptyList(cdr) ? 10 : cdr
+    if (typeof radix !== 'number' || typeof num !== 'string')
+      throw new Error('Expected a number')
+
+    // floats can only be in base 10,
+    // and if user specified base 10 manually, there's no harm in parsing as float (except performance)
+    if (radix === 10)
+      return parseFloat(num)
+
+    return parseInt(num, radix)
+  }),
+
+/* Strings */
+  createBinaryOp('str-concat', (a: string, b: string) => a + b, typeOf('string')),
+  createBoostrapEntry('str', 1, ({ car }) => printExpression(car)),
+
+/* Lists */
+  createBoostrapEntry('car', 1, ({ car: arg }) => R.ConsLib.car(arg)),
+  createBoostrapEntry('cdr', 1, ({ car: arg }) => R.ConsLib.cdr(arg)),
+  createBoostrapEntry('list*', [2, Infinity], args => {
+    if (!R.isCons(args))
+      throw new TypeError(`list*: Expecting cons, but recieved ${printExpression(args)}`)
+    return R.ConsLib.fromArray([...R.ConsLib.listToIterable(args, false)], { notProper: true })
+  }),
+  createBoostrapEntry('append', [0, Infinity], args => {
+    return R.ConsLib.append(R.ConsLib.listToIterable(args, false))
+  }),
+  createPred('list?', R.isProperList),
+
+/* Symbols */
+  createPred('symbol-interned?', v => {
+    if (typeof v !== 'symbol')
+      throw new TypeError(`Expected symbol?, given ${printExpression(v)}`)
+    return R.isInterned(v)
+  }),
   createBoostrapEntry('string->symbol', 1, args => {
     const { car: arg } = args
     if (typeof arg !== 'string')
@@ -397,12 +378,53 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
       throw new TypeError(`${printExpression(arg)} is not a string`)
     return Symbol(arg)
   }),
+  createBoostrapEntry('gensym', [0, 1], args => {
+    let prefix = 'g'
+    if (R.isCons(args)) {
+      const { car } = args
+      if (typeof car !== 'string')
+        throw new Error('gensym: expected string prefix')
+      prefix = car
+    }
+
+    return Symbol(`${prefix}${gensymCounter++}`)
+  }),
+
+  createBoostrapEntry('print', 1, args => {
+    const { car: arg } = args
+    console.log(printExpression(arg))
+    return arg
+  }),
+  createBoostrapEntry('exit', [0, 1], args => {
+    const { car: num } = R.isCons(args) ? args : { car: 0 }
+    if (typeof num !== 'number')
+      throw new Error('exit: expected number')
+    process.exit(num)
+    return num
+  }),
   createBoostrapEntry('read/string', 1, args => {
     const { car: arg } = args
     if (typeof arg !== 'string')
       throw new TypeError(`Expected string?, given ${printExpression(arg)}`)
     const arr = readString(arg)
     return arr.length === 1 ? arr[0] : R.ConsLib.fromArray(arr)
+  }),
+  createBoostrapEntry('eval', 1, args => {
+    const { car: arg } = args as Cons
+    return evalFn(symboltable, arg)
+  }),
+  createBoostrapEntry('native-eval', 1, args => {
+    const { car: str } = args
+    if (typeof str !== 'string')
+      throw new Error('native-eval: expected string')
+
+    const evaluated: unknown = vm.runInContext(str, vmContext)
+
+    const val = R.Util.marshallValue(evaluated)
+    if (val === null)
+      throw Error('native-eval: returned invalid value')
+
+    return val
   }),
   createBoostrapEntry('macroexpand', 1, (args, env) => {
     const { car: arg } = args
@@ -412,6 +434,10 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
     const { car: arg } = args
     return macroExpand1(arg, env)
   }),
+
+/* Procedures */
+  createPred('lambda?', R.isLambdaFn),
+  createPred('macro?', R.isMacro),
   createBoostrapEntry('procedure-arity', 1, args => {
     const { car: fn } = args
     if (!R.isProcedure(fn))
@@ -446,17 +472,13 @@ const symboltableTable: SymbolTable['table'] = new Map<symbol, SExpression>([
       throw new Error('curry: expected function')
     return { ...fn, curried: fn.curried || [] }
   }),
-  createBoostrapEntry('gensym', [0, 1], args => {
-    let prefix = 'g'
-    if (R.isCons(args)) {
-      const { car } = args
-      if (typeof car !== 'string')
-        throw new Error('gensym: expected string prefix')
-      prefix = car
-    }
-
-    return Symbol(`${prefix}${gensymCounter++}`)
+  createBoostrapEntry('macro', 1, args => {
+    const { car: fn } = args
+    if (!R.isProcedure(fn))
+      throw new Error('macro: expected function')
+    return { ...fn, macro: true }
   }),
+
   createBoostrapEntry('throw', 1, args => {
     const { car: message } = args
     if (typeof message !== 'string')

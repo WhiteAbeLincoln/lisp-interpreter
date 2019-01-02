@@ -10,7 +10,7 @@ import { printExpression } from './print'
 import {
   quoteSym, condSym,
   defineSym, lambdaSym, quasiquoteSym,
-  unquoteSym, unquoteSpliceSym, macroSym,
+  unquoteSym, unquoteSpliceSym,
   f as False
 } from './runtime/common-symbols'
 import {
@@ -246,19 +246,6 @@ export const evalFn = (env: SymbolTable, expr: SExpression): SExpression => {
               value.name = name.description
             }
             return setValue(env, name, value)
-          }
-          case macroSym: {
-            const { car: arglist, cdr: { car: body } } = validate(expr, 2)
-            const lambdalist = argumentlist(arglist)
-            const num = normalizeArity(lambdalist)
-
-            return lambda({
-              numParams: num,
-              params: lambdalist,
-              body,
-              env,
-              macro: true
-            })
           }
           case lambdaSym: {
             /* a lambda is composed of 2 parts

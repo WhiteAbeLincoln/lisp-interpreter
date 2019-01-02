@@ -1,6 +1,6 @@
-import { andT, or } from '../match/functional'
-import { Overwrite, MakeKeysOptional } from '../match/types'
-import { typeOf } from '../match/predicates'
+import { andT, or } from '../util/functional/contracts'
+import { Overwrite, MakeKeysOptional } from '../util/functional/types'
+import { typeOf } from '../util/functional/predicates'
 import { T, t, f, F } from './common-symbols'
 
 export const SKind = Symbol('kind')

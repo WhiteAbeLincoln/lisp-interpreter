@@ -1,6 +1,8 @@
 // tslint:disable:interface-over-type-literal
 import * as utils from './util-types'
 
+export type Fn<A extends any[], R> = (...args: A) => R
+
 /**
  * Use to prevent a usage of type `T` from being inferred in other generics.
  * Borrowed from @pelotom's `type-zoo`
@@ -41,6 +43,7 @@ export type LengthOf<T extends any[]> = T['length']
 export type Inc = { [i: number]: number; 0: 1; 1: 2; 2: 3; 3: 4; 4: 5; 5: 6; 6: 7; 7: 8; 8: 9; 9: 10; 10: 11; 11: 12; 12: 13; 13: 14; 14: 15; 15: 16; 16: 17; 17: 18; 18: 19; 19: 20; 20: 21; 21: 22; 22: 23; 23: 24; 24: 25; 25: number };
 export type Matches<V, T> = V extends T ? '1' : '0'
 export type Equal<V, T> = V extends T ? (T extends V ? '1' : '0') : '0'
+export type If<T extends '1' | '0', Then, Else> = T extends '1' ? Then : Else
 
 export interface LengthedArray<T extends any, N extends number>
   extends Array<T> {

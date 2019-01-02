@@ -5,10 +5,12 @@ import {
   ParenToken, printToken, StringToken, SymToken,
   Token, QuoteToken, lexer
 } from './lexer'
-import { or } from './match/functional'
+import { or } from './util/functional/contracts'
 import { quoteSym, quasiquoteSym, unquoteSym, unquoteSpliceSym, symExpr } from './runtime/common-symbols'
-import { arrayReadFun, Reader, Refinement, compose } from './util'
+import { arrayReadFun, Reader } from './util/util'
 import { SExpression, Cons, empty, cons, consProper } from './runtime/SExpression'
+import { Refinement } from './util/functional/types'
+import { compose } from './util/functional/functional'
 
 const isParen = (tok: Token): tok is ParenToken => tok.kind === 'paren'
 

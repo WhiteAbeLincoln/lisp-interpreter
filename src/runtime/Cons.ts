@@ -1,7 +1,7 @@
-import { last, reduceRightEager, reduce as reduceI, listParts } from '../iterable'
+import { last, reduceRightEager, reduce as reduceI, listParts } from '../util/iterable'
 import produce from 'immer'
-import { flip } from '../match/functional'
-import { Predicate, Mutable } from '../match/types'
+import { flip } from '../util/functional/functional'
+import { Predicate, Mutable } from '../util/functional/types'
 import { printExpression } from '../print'
 import { SExpression, Cons, EmptyList, isEmptyList, empty, isSExpression, isCons, cons, ConsG, List, isProperList, consProper } from './SExpression'
 

@@ -1,17 +1,3 @@
-import { Fn } from './match/functional'
-
-export type Predicate<T> = (a: T) => boolean;
-export type Refinement<A, B extends A> = (a: A) => a is B;
-export const truthy = <T>(
-  v: T
-): v is Exclude<T, null | undefined | false | 0 | ""> => !!v;
-
-/**
- * Forces the variadic list passed as `a` to be typed as a tuple
- * @param a
- */
-export const tuple = <T extends any[]>(...a: T) => a;
-
 export function filterMap<A, B>(
   xs: A[],
   filter: (x: A, idx: number, arr: A[]) => boolean,
@@ -144,79 +130,6 @@ export class Reader<T> {
     return value || undefined;
   }
 }
-
-export function compose<As extends any[], B, C>(
-  bc: Fn<[B], C>,
-  ab: Fn<As, B>,
-): Fn<As, C>
-export function compose<As extends any[], B, C, D>(
-  cd: Fn<[C], D>,
-  bc: Fn<[B], C>,
-  ab: Fn<As, B>,
-): Fn<As, D>
-export function compose<As extends any[], B, C, D, E>(
-  de: Fn<[D], E>,
-  cd: Fn<[C], D>,
-  bc: Fn<[B], C>,
-  ab: Fn<As, B>,
-): Fn<As, E>
-export function compose<As extends any[], B, C, D, E, F>(
-  ef: Fn<[E], F>,
-  de: Fn<[D], E>,
-  cd: Fn<[C], D>,
-  bc: Fn<[B], C>,
-  ab: Fn<As, B>,
-): Fn<As, F>
-export function compose<As extends any[], B, C, D, E, F, G>(
-  fg: Fn<[F], G>,
-  ef: Fn<[E], F>,
-  de: Fn<[D], E>,
-  cd: Fn<[C], D>,
-  bc: Fn<[B], C>,
-  ab: Fn<As, B>,
-): Fn<As, G>
-export function compose<As extends any[], B, C, D, E, F, G, H>(
-  gh: Fn<[G], H>,
-  fg: Fn<[F], G>,
-  ef: Fn<[E], F>,
-  de: Fn<[D], E>,
-  cd: Fn<[C], D>,
-  bc: Fn<[B], C>,
-  ab: Fn<As, B>,
-): Fn<As, H>
-export function compose<As extends any[], B, C, D, E, F, G, H, I>(
-  hi: Fn<[H], I>,
-  gh: Fn<[G], H>,
-  fg: Fn<[F], G>,
-  ef: Fn<[E], F>,
-  de: Fn<[D], E>,
-  cd: Fn<[C], D>,
-  bc: Fn<[B], C>,
-  ab: Fn<As, B>,
-): Fn<As, I>
-export function compose<As extends any[], B, C, D, E, F, G, H, I, J>(
-  ij: Fn<[I], J>,
-  hi: Fn<[H], I>,
-  gh: Fn<[G], H>,
-  fg: Fn<[F], G>,
-  ef: Fn<[E], F>,
-  de: Fn<[D], E>,
-  cd: Fn<[C], D>,
-  bc: Fn<[B], C>,
-  ab: Fn<As, B>,
-): Fn<As, J>
-export function compose(...fns: Array<Function>): Function {
-  const len = fns.length - 1
-  return function(this: any, ...args: any[]) {
-    let y = args
-    for (let i = len; i > -1; i--) {
-      y = [fns[i].call(this, ...y)]
-    }
-    return y[0]
-  }
-}
-
-export const id = <T>(x: T) => x
 
 export const gt = (x: number, y: number) => x > y
 export const gte = (x: number, y: number) => x >= y

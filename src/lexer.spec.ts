@@ -1,6 +1,7 @@
 import fc from 'fast-check'
-import { truthy, tuple, id, compose } from './util'
+import { tuple, id, compose } from './util/functional/functional'
 import { Token, ParenToken, NumToken, usePositionState, lexer } from './lexer'
+import { isTruthy } from './util/functional/predicates';
 
 /**
  * Generates a string consisting of (, ), and whitespace
@@ -161,7 +162,7 @@ const isListOfParens = isListOf(str => {
       }
       return null
     })
-    .filter(truthy)
+    .filter(isTruthy)
 })
 
 const isListOfNumbers = isListOf(str => {

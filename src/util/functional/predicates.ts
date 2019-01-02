@@ -1,4 +1,4 @@
-import { andT, all, and, or } from './functional'
+import { andT, all, and, or } from './contracts'
 import {
   Refinement,
   RefinementTo,
@@ -34,6 +34,10 @@ export type TypeFromName<
   : never // prettier-ignore
 
 export type Primitives = string | number | boolean | symbol | bigint
+
+export const isTruthy = <T>(
+  v: T
+): v is Exclude<T, null | undefined | false | 0 | ""> => !!v;
 
 /**
  * Refinement function for typeof

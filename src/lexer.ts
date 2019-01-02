@@ -1,4 +1,4 @@
-import { tuple } from './util'
+import { tuple } from './util/functional/functional'
 
 export type TokenBase = {
   origvalue: string

@@ -1,4 +1,4 @@
-import { Predicate, Refinement, KeysMatching, MakeKeysOptional, UndefinedKeys } from './match/types'
+import { Predicate, Refinement, MakeKeysOptional, UndefinedKeys } from './functional/types'
 
 export const last = <A>(xs: Iterable<A>) => {
   const lst = [...xs]

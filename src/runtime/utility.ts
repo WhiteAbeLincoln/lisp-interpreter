@@ -5,7 +5,7 @@ import {
 import { t, f } from './common-symbols'
 import { validate } from '../symboltable/symboltable'
 import { listToIterable, fromArray } from './Cons'
-import { typeOf } from '../match/predicates';
+import { typeOf } from '../util/functional/predicates'
 
 export const symDesc = (a: symbol) => (a as typeof a & { description?: string }).description
 export const boolToLisp = (v: unknown) => v === false ? f : t
